@@ -288,9 +288,13 @@ mod tests {
                 prestige_rate_values: vec![0.03, 0.08],
             },
             knockout_variants: vec![crate::KnockoutMode::None],
+            ..crate::SweepConfig::default()
         });
         let rows = crate::run_sweep(&app);
         assert_eq!(rows.len(), 4);
+        for r in rows {
+            assert!((0.0..=1.0).contains(&r.fit_score));
+        }
     }
 
     #[test]

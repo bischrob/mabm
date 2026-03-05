@@ -70,6 +70,10 @@ Goal:
    - population trend snapshots
    - aggregation and abandonment metrics
    - network structure metrics (edge count, density, mean weight)
+16. `[x]` Sweep-level fit scoring implemented:
+   - configurable target profile and weights
+   - normalized error components per pattern
+   - per-run fit score in sweep summary output
 
 ## In Progress (Current MVP Build)
 
@@ -83,11 +87,11 @@ Goal:
 
 ## Next (Highest Priority)
 
-1. `[ ]` Add sweep-level fit scoring against target pattern metrics.
+1. `[ ]` Add parallel sweep execution for large parameter grids.
 
 ## Next After That
 
-1. `[ ]` Add parallel sweep execution for large parameter grids.
+1. `[ ]` Add richer pattern targets (time-series shapes, not endpoint-only).
 
 ## MVP Acceptance Gate
 

@@ -75,6 +75,27 @@ enabled = false
 snapshot_every = 1
 knockout_variants = ["none"]
 
+[sweep.fit_scoring]
+enabled = true
+
+[sweep.fit_scoring.targets]
+population_total = 3000.0
+aggregation_count = 5.0
+network_density = 0.25
+mean_stress = 0.45
+
+[sweep.fit_scoring.weights]
+population = 0.35
+aggregation = 0.25
+network_density = 0.20
+stress = 0.20
+
+[sweep.fit_scoring.scales]
+population = 1500.0
+aggregation = 3.0
+network_density = 0.20
+stress = 0.20
+
 [sweep.seed_policy]
 type = "incremental"
 start = 1000

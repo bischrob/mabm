@@ -15,6 +15,8 @@ pub struct SweepConfig {
     pub ranges: SweepRanges,
     #[serde(default = "default_knockout_variants")]
     pub knockout_variants: Vec<KnockoutMode>,
+    #[serde(default)]
+    pub fit_scoring: FitScoringConfig,
 }
 
 impl Default for SweepConfig {
@@ -25,6 +27,7 @@ impl Default for SweepConfig {
             seed_policy: SeedPolicy::Incremental { start: 1000 },
             ranges: SweepRanges::default(),
             knockout_variants: default_knockout_variants(),
+            fit_scoring: FitScoringConfig::default(),
         }
     }
 }
@@ -102,6 +105,90 @@ pub struct SweepSummaryRow {
     pub trait_rows: usize,
     pub deposition_rows: usize,
     pub network_rows: usize,
+    pub fit_score: f32,
+    pub fit_error_population: f32,
+    pub fit_error_aggregation: f32,
+    pub fit_error_network_density: f32,
+    pub fit_error_stress: f32,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct FitScoringConfig {
+    pub enabled: bool,
+    #[serde(default)]
+    pub targets: FitTargetProfile,
+    #[serde(default)]
+    pub weights: FitWeights,
+    #[serde(default)]
+    pub scales: FitScales,
+}
+
+impl Default for FitScoringConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            targets: FitTargetProfile::default(),
+            weights: FitWeights::default(),
+            scales: FitScales::default(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct FitTargetProfile {
+    pub population_total: f32,
+    pub aggregation_count: f32,
+    pub network_density: f32,
+    pub mean_stress: f32,
+}
+
+impl Default for FitTargetProfile {
+    fn default() -> Self {
+        Self {
+            population_total: 3000.0,
+            aggregation_count: 5.0,
+            network_density: 0.25,
+            mean_stress: 0.45,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct FitWeights {
+    pub population: f32,
+    pub aggregation: f32,
+    pub network_density: f32,
+    pub stress: f32,
+}
+
+impl Default for FitWeights {
+    fn default() -> Self {
+        Self {
+            population: 0.35,
+            aggregation: 0.25,
+            network_density: 0.20,
+            stress: 0.20,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct FitScales {
+    pub population: f32,
+    pub aggregation: f32,
+    pub network_density: f32,
+    pub stress: f32,
+}
+
+impl Default for FitScales {
+    fn default() -> Self {
+        Self {
+            population: 1500.0,
+            aggregation: 3.0,
+            network_density: 0.20,
+            stress: 0.20,
+        }
+    }
 }
 
 pub fn run_sweep(cfg: &AppConfig) -> Vec<SweepSummaryRow> {
@@ -146,6 +233,46 @@ pub fn run_sweep(cfg: &AppConfig) -> Vec<SweepSummaryRow> {
                             / settlement_count as f32
                     };
 
+                    let (fit_score, fit_error_population, fit_error_aggregation, fit_error_network_density, fit_error_stress) =
+                        if sweep.fit_scoring.enabled {
+                            let maybe_last = result.baseline_metric_rows.last();
+                            if let Some(last) = maybe_last {
+                                let errors = compute_fit_errors(
+                                    sweep.fit_scoring.targets.population_total,
+                                    sweep.fit_scoring.targets.aggregation_count,
+                                    sweep.fit_scoring.targets.network_density,
+                                    sweep.fit_scoring.targets.mean_stress,
+                                    sweep.fit_scoring.scales.population,
+                                    sweep.fit_scoring.scales.aggregation,
+                                    sweep.fit_scoring.scales.network_density,
+                                    sweep.fit_scoring.scales.stress,
+                                    last.population_total as f32,
+                                    last.aggregation_count as f32,
+                                    last.network_density,
+                                    mean_stress_composite,
+                                );
+                                let score = 1.0
+                                    - weighted_error(
+                                        errors.0,
+                                        errors.1,
+                                        errors.2,
+                                        errors.3,
+                                        &sweep.fit_scoring.weights,
+                                    );
+                                (
+                                    score.clamp(0.0, 1.0),
+                                    errors.0,
+                                    errors.1,
+                                    errors.2,
+                                    errors.3,
+                                )
+                            } else {
+                                (0.0, 1.0, 1.0, 1.0, 1.0)
+                            }
+                        } else {
+                            (0.0, 0.0, 0.0, 0.0, 0.0)
+                        };
+
                     rows.push(SweepSummaryRow {
                         scenario_id: cfg.scenario_id.clone(),
                         run_index,
@@ -160,6 +287,11 @@ pub fn run_sweep(cfg: &AppConfig) -> Vec<SweepSummaryRow> {
                         trait_rows: result.trait_rows.len(),
                         deposition_rows: result.deposition_rows.len(),
                         network_rows: result.network_rows.len(),
+                        fit_score,
+                        fit_error_population,
+                        fit_error_aggregation,
+                        fit_error_network_density,
+                        fit_error_stress,
                     });
                     run_index += 1;
                 }
@@ -203,6 +335,35 @@ fn knockout_label(k: &KnockoutMode) -> &'static str {
         KnockoutMode::NoCulturalTransmission => "no_cultural_transmission",
         KnockoutMode::NoWaterQualityDiseaseCoupling => "no_water_quality_disease_coupling",
     }
+}
+
+fn compute_fit_errors(
+    target_pop: f32,
+    target_agg: f32,
+    target_density: f32,
+    target_stress: f32,
+    scale_pop: f32,
+    scale_agg: f32,
+    scale_density: f32,
+    scale_stress: f32,
+    obs_pop: f32,
+    obs_agg: f32,
+    obs_density: f32,
+    obs_stress: f32,
+) -> (f32, f32, f32, f32) {
+    let e_pop = ((obs_pop - target_pop).abs() / scale_pop.max(1e-6)).clamp(0.0, 1.0);
+    let e_agg = ((obs_agg - target_agg).abs() / scale_agg.max(1e-6)).clamp(0.0, 1.0);
+    let e_density =
+        ((obs_density - target_density).abs() / scale_density.max(1e-6)).clamp(0.0, 1.0);
+    let e_stress =
+        ((obs_stress - target_stress).abs() / scale_stress.max(1e-6)).clamp(0.0, 1.0);
+    (e_pop, e_agg, e_density, e_stress)
+}
+
+fn weighted_error(e_pop: f32, e_agg: f32, e_density: f32, e_stress: f32, w: &FitWeights) -> f32 {
+    let ws = (w.population + w.aggregation + w.network_density + w.stress).max(1e-6);
+    (w.population * e_pop + w.aggregation * e_agg + w.network_density * e_density + w.stress * e_stress)
+        / ws
 }
 
 pub fn write_sweep_summary_csv<P: AsRef<std::path::Path>>(

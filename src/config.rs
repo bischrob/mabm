@@ -182,6 +182,32 @@ pub fn validate_config(cfg: &AppConfig) -> Result<(), ConfigError> {
                     "enabled sweep requires at least one knockout variant".to_string(),
                 ));
             }
+            if sweep.fit_scoring.enabled {
+                if sweep.fit_scoring.scales.population <= 0.0
+                    || sweep.fit_scoring.scales.aggregation <= 0.0
+                    || sweep.fit_scoring.scales.network_density <= 0.0
+                    || sweep.fit_scoring.scales.stress <= 0.0
+                {
+                    return Err(ConfigError::Validation(
+                        "sweep.fit_scoring scales must be > 0.0".to_string(),
+                    ));
+                }
+                let w = &sweep.fit_scoring.weights;
+                if w.population < 0.0
+                    || w.aggregation < 0.0
+                    || w.network_density < 0.0
+                    || w.stress < 0.0
+                {
+                    return Err(ConfigError::Validation(
+                        "sweep.fit_scoring weights must be >= 0.0".to_string(),
+                    ));
+                }
+                if (w.population + w.aggregation + w.network_density + w.stress) <= 0.0 {
+                    return Err(ConfigError::Validation(
+                        "sweep.fit_scoring weights must sum to > 0.0".to_string(),
+                    ));
+                }
+            }
         }
     }
     Ok(())
