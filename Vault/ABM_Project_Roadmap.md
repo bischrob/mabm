@@ -106,6 +106,10 @@ Goal:
    - settlement snapshot output for map rendering
    - hex-grid settlement map with active/abandoned differentiation
    - population time-series graph from baseline metrics
+25. `[x]` GUI live-update controls implemented:
+   - configurable GUI update frequency in ticks (`mvp.gui.live_update_every_ticks`)
+   - run-time tick override control in GUI/API
+   - population graph axis ticks and hex-map legend
 
 ## In Progress (Current MVP Build)
 

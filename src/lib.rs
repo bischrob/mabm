@@ -27,7 +27,10 @@ pub use model::{
     ClimateState, ConflictState, DiseaseState, FoodState, FuelState, LaborState, Season,
     SettlementState, SimulationState, WaterState,
 };
-pub use mvp::{build_synthetic_state, run_mvp_simulation, MvpRunConfig, MvpRunResult};
+pub use mvp::{
+    build_synthetic_state, run_mvp_simulation, run_mvp_simulation_with_progress, GuiRuntimeConfig,
+    MvpRunConfig, MvpRunResult,
+};
 pub use output::{
     collect_network_snapshot_rows, collect_settlement_snapshot_rows, collect_trait_deposition_rows,
     collect_trait_frequency_rows, write_network_snapshot_csv, write_settlement_snapshot_csv,

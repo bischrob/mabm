@@ -17,6 +17,16 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/api/live-progress", async (_req, res) => {
+  try {
+    const p = path.join(outputsDir, "live_progress.json");
+    const raw = await fs.readFile(p, "utf-8");
+    res.type("application/json").send(raw);
+  } catch {
+    res.json({ running: false });
+  }
+});
+
 app.get("/api/runs", async (_req, res) => {
   try {
     const raw = await fs.readFile(runIndexPath, "utf-8");
@@ -93,7 +103,36 @@ app.get("/api/runs/:runId/visuals", async (req, res) => {
 
 app.post("/api/run", async (req, res) => {
   const configPath = req.body?.configPath ?? "configs/sweep.toml";
-  const args = ["run", "--quiet", "--", configPath];
+  const ticksOverride = Number(req.body?.ticksOverride ?? 0);
+  const liveUpdateEveryTicks = Number(req.body?.liveUpdateEveryTicks ?? 0);
+  let runConfigPath = configPath;
+  let tempConfigPath = null;
+  if (ticksOverride > 0 || liveUpdateEveryTicks > 0) {
+    try {
+      const srcPath = path.isAbsolute(configPath) ? configPath : path.join(repoRoot, configPath);
+      const raw = await fs.readFile(srcPath, "utf-8");
+      let patched = raw;
+      if (ticksOverride > 0) {
+        patched = patched.replace(/^ticks\s*=\s*\d+/m, `ticks = ${Math.floor(ticksOverride)}`);
+      }
+      if (/^\[mvp\.gui\]/m.test(patched)) {
+        patched = patched.replace(
+          /^live_update_every_ticks\s*=\s*\d+/m,
+          `live_update_every_ticks = ${Math.max(0, Math.floor(liveUpdateEveryTicks))}`
+        );
+      } else {
+        patched += `\n[mvp.gui]\nlive_update_every_ticks = ${Math.max(0, Math.floor(liveUpdateEveryTicks))}\n`;
+      }
+      tempConfigPath = path.join(repoRoot, "outputs", `_tmp_gui_run_${Date.now()}.toml`);
+      await fs.writeFile(tempConfigPath, patched, "utf-8");
+      runConfigPath = tempConfigPath;
+    } catch (e) {
+      res.status(400).json({ error: `failed to patch config: ${String(e)}` });
+      return;
+    }
+  }
+
+  const args = ["run", "--quiet", "--", runConfigPath];
   const child = spawn("cargo", args, { cwd: repoRoot, shell: true });
 
   let stdout = "";
@@ -102,6 +141,9 @@ app.post("/api/run", async (req, res) => {
   child.stderr.on("data", (d) => (stderr += d.toString()));
 
   child.on("close", (code) => {
+    if (tempConfigPath) {
+      fs.unlink(tempConfigPath).catch(() => {});
+    }
     if (code === 0) {
       res.json({ ok: true, code, stdout, stderr });
     } else {

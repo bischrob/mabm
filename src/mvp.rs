@@ -37,6 +37,8 @@ pub struct MvpRunConfig {
     pub metrics: MetricsConfig,
     #[serde(default)]
     pub demography: DemographyConfig,
+    #[serde(default)]
+    pub gui: GuiRuntimeConfig,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -74,6 +76,20 @@ impl Default for MvpRunConfig {
             mechanisms: MechanismToggleConfig::default(),
             metrics: MetricsConfig::default(),
             demography: DemographyConfig::default(),
+            gui: GuiRuntimeConfig::default(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GuiRuntimeConfig {
+    pub live_update_every_ticks: u32,
+}
+
+impl Default for GuiRuntimeConfig {
+    fn default() -> Self {
+        Self {
+            live_update_every_ticks: 0,
         }
     }
 }
@@ -308,6 +324,25 @@ pub fn run_mvp_simulation(
     coupling: CouplingConfig,
     config_hash: Option<&str>,
 ) -> MvpRunResult {
+    run_mvp_simulation_with_progress(
+        cfg,
+        coupling,
+        config_hash,
+        cfg.gui.live_update_every_ticks,
+        |_| {},
+    )
+}
+
+pub fn run_mvp_simulation_with_progress<F>(
+    cfg: &MvpRunConfig,
+    coupling: CouplingConfig,
+    config_hash: Option<&str>,
+    progress_every_ticks: u32,
+    mut progress_cb: F,
+) -> MvpRunResult
+where
+    F: FnMut(&SimulationState),
+{
     let mut state = build_synthetic_state(cfg);
     if let Some(hash) = config_hash {
         state.version.config_hash = hash.to_string();
@@ -322,6 +357,9 @@ pub fn run_mvp_simulation(
 
     for _ in 0..cfg.ticks {
         engine.run_one_tick(&mut state);
+        if progress_every_ticks > 0 && state.tick % progress_every_ticks == 0 {
+            progress_cb(&state);
+        }
         if cfg.validation_outputs.enable_trait_deposition {
             accumulate_trait_deposition(
                 &mut state,

@@ -1,17 +1,37 @@
 :root {
-  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-  color: #152018;
-  background: radial-gradient(circle at 10% 0%, #d7ead7, #f2f5ea 40%, #ece8df);
+  --vp-c-bg: #ffffff;
+  --vp-c-bg-soft: #f6f8fa;
+  --vp-c-bg-mute: #f1f3f5;
+  --vp-c-border: #dfe3e8;
+  --vp-c-border-strong: #c3c9d0;
+  --vp-c-text-1: #213547;
+  --vp-c-text-2: #4e5f70;
+  --vp-c-brand-1: #3b82f6;
+  --vp-c-brand-2: #2563eb;
+  --vp-c-danger-1: #dc2626;
+  --hex-active-fill: #e6f2ff;
+  --hex-active-stroke: #60a5fa;
+  --hex-active-node: #2563eb;
+  --hex-abandoned-fill: #f8fafc;
+  --hex-abandoned-stroke: #cbd5e1;
+  --hex-abandoned-node: #94a3b8;
+  --viz-axis: #94a3b8;
+  --viz-line: #2563eb;
+  --viz-text: #64748b;
+  font-family: "Inter", "Segoe UI", sans-serif;
+  color: var(--vp-c-text-1);
+  background: var(--vp-c-bg-soft);
 }
 
 body {
   margin: 0;
+  background: linear-gradient(180deg, #f8fafc 0%, #f6f8fa 100%);
 }
 
 .app {
-  max-width: 1300px;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 20px;
+  padding: 24px;
 }
 
 .topbar {
@@ -19,41 +39,83 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--vp-c-border);
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  letter-spacing: 0.01em;
 }
 
 .runbox {
   display: flex;
   gap: 10px;
+  align-items: center;
 }
 
 .cfg {
-  min-width: 300px;
+  min-width: 320px;
 }
 
 button,
 input {
-  border: 1px solid #839083;
-  border-radius: 6px;
-  padding: 8px 10px;
-  background: #fcfffb;
+  border: 1px solid var(--vp-c-border-strong);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--vp-c-bg);
+  color: var(--vp-c-text-1);
+  font-size: 0.92rem;
+}
+
+label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--vp-c-text-2);
+  font-size: 0.85rem;
+}
+
+input.small {
+  width: 90px;
 }
 
 button {
   cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+button:hover {
+  border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-brand-2);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 .panel {
-  background: #ffffffd9;
-  border: 1px solid #c8d1c8;
-  border-radius: 10px;
-  padding: 12px;
+  background: var(--vp-c-bg);
+  border: 1px solid var(--vp-c-border);
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
+}
+
+.panel h2 {
+  margin: 0 0 10px 0;
+  font-size: 1rem;
+  color: var(--vp-c-text-2);
+  font-weight: 600;
 }
 
 .panel.full {
@@ -63,39 +125,48 @@ button {
 .viz {
   width: 100%;
   min-height: 220px;
-  background: linear-gradient(180deg, #f7faf2, #edf3e6);
-  border: 1px solid #d5ded0;
-  border-radius: 8px;
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-border);
+  border-radius: 10px;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 0.82rem;
 }
 
 th,
 td {
   text-align: left;
-  border-bottom: 1px solid #e3e8e3;
-  padding: 6px 5px;
+  border-bottom: 1px solid var(--vp-c-border);
+  padding: 7px 6px;
+}
+
+th {
+  color: var(--vp-c-text-2);
+  font-weight: 600;
 }
 
 tbody tr {
   cursor: pointer;
 }
 
+tbody tr:hover {
+  background: #f3f7ff;
+}
+
 tbody tr.active {
-  background: #dcefd6;
+  background: #eaf2ff;
 }
 
 .error {
-  margin-top: 10px;
-  color: #721c1c;
-  background: #ffd9d9;
-  border: 1px solid #ce9f9f;
-  border-radius: 8px;
-  padding: 8px;
+  margin-top: 12px;
+  color: var(--vp-c-danger-1);
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-radius: 10px;
+  padding: 10px;
 }
 
 pre {
@@ -103,12 +174,18 @@ pre {
   max-height: 260px;
   overflow: auto;
   margin: 0;
+  padding: 10px;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 8px;
+  background: var(--vp-c-bg-soft);
+  color: var(--vp-c-text-2);
 }
 
 .details {
   display: grid;
   gap: 6px;
-  font-size: 14px;
+  font-size: 0.9rem;
+  color: var(--vp-c-text-2);
 }
 
 @media (max-width: 900px) {

@@ -61,6 +61,8 @@ export function App() {
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedManifest, setSelectedManifest] = useState<RunManifest | null>(null);
   const [configPath, setConfigPath] = useState("configs/sweep.toml");
+  const [ticksOverride, setTicksOverride] = useState(0);
+  const [liveUpdateEveryTicks, setLiveUpdateEveryTicks] = useState(10);
   const [running, setRunning] = useState(false);
   const [runLog, setRunLog] = useState("");
   const [visuals, setVisuals] = useState<VisualPayload | null>(null);
@@ -86,6 +88,37 @@ export function App() {
       .catch((e) => setError(String(e)));
   }, [selectedRunId]);
 
+  useEffect(() => {
+    if (!running) return;
+    const timer = setInterval(() => {
+      fetch("/api/live-progress")
+        .then((r) => r.json())
+        .then((lp) => {
+          if (lp && Array.isArray(lp.settlements_latest)) {
+            setVisuals((prev) => {
+              const base = prev?.population_series ?? [];
+              const year = Number(lp.year ?? 0);
+              const pop = Number(lp.population_total ?? 0);
+              const nextSeries =
+                base.length > 0 && Math.abs(base[base.length - 1].year - year) < 1e-6
+                  ? base.map((p, i) =>
+                      i === base.length - 1 ? { year, population_total: pop } : p
+                    )
+                  : [...base, { year, population_total: pop }];
+              return {
+                run_id: String(lp.run_id ?? prev?.run_id ?? ""),
+                latest_tick: Number(lp.tick ?? prev?.latest_tick ?? 0),
+                settlements_latest: lp.settlements_latest,
+                population_series: nextSeries
+              };
+            });
+          }
+        })
+        .catch(() => {});
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [running]);
+
   const entries = useMemo(() => index?.entries ?? [], [index]);
 
   async function refreshIndex() {
@@ -110,7 +143,7 @@ export function App() {
       const res = await fetch("/api/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ configPath })
+        body: JSON.stringify({ configPath, ticksOverride, liveUpdateEveryTicks })
       });
       const body = await res.json();
       if (!res.ok) {
@@ -139,6 +172,29 @@ export function App() {
             {running ? "Running..." : "Run"}
           </button>
           <button onClick={refreshIndex}>Refresh</button>
+        </div>
+        <div className="runbox">
+          <label>
+            Ticks:
+            <input
+              type="number"
+              min={1}
+              value={ticksOverride || ""}
+              onChange={(e) => setTicksOverride(Number(e.target.value || 0))}
+              className="small"
+              placeholder="use config"
+            />
+          </label>
+          <label>
+            GUI update every:
+            <input
+              type="number"
+              min={0}
+              value={liveUpdateEveryTicks}
+              onChange={(e) => setLiveUpdateEveryTicks(Number(e.target.value || 0))}
+              className="small"
+            />
+          </label>
         </div>
       </header>
 
@@ -191,7 +247,7 @@ export function App() {
         </section>
 
         <section className="panel">
-          <h2>Settlement Hex Grid</h2>
+      <h2>Settlement Hex Grid</h2>
           <HexGridMap settlements={visuals?.settlements_latest ?? []} />
         </section>
 
@@ -228,7 +284,7 @@ function HexGridMap({ settlements }: { settlements: VisualSettlement[] }) {
   const h = maxY - minY + pad * 2 + size * 2;
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="viz">
+    <svg viewBox={`0 0 ${w} ${h + 34}`} className="viz">
       {positioned.map((p) => {
         const cx = p.x - minX + pad + size;
         const cy = p.y - minY + pad + size;
@@ -237,20 +293,26 @@ function HexGridMap({ settlements }: { settlements: VisualSettlement[] }) {
           <g key={p.settlement_id}>
             <polygon
               points={poly}
-              fill={p.is_active ? "#d8f0c9" : "#f0e4d8"}
-              stroke={p.is_active ? "#4e8d4e" : "#9a6b47"}
+              fill={p.is_active ? "var(--hex-active-fill)" : "var(--hex-abandoned-fill)"}
+              stroke={p.is_active ? "var(--hex-active-stroke)" : "var(--hex-abandoned-stroke)"}
               strokeWidth={1.1}
             />
             <circle
               cx={cx}
               cy={cy}
               r={Math.max(2, Math.min(9, Math.sqrt(p.population_total) * 0.32))}
-              fill={p.is_active ? "#2d6e2d" : "#934c2a"}
+              fill={p.is_active ? "var(--hex-active-node)" : "var(--hex-abandoned-node)"}
               opacity={0.9}
             />
           </g>
         );
       })}
+      <g transform={`translate(10, ${h + 14})`}>
+        <rect x={0} y={-8} width={12} height={12} fill="var(--hex-active-fill)" stroke="var(--hex-active-stroke)" />
+        <text x={18} y={2} fontSize="10" fill="var(--viz-text)">Active settlement</text>
+        <rect x={120} y={-8} width={12} height={12} fill="var(--hex-abandoned-fill)" stroke="var(--hex-abandoned-stroke)" />
+        <text x={138} y={2} fontSize="10" fill="var(--viz-text)">Abandoned settlement</text>
+      </g>
     </svg>
   );
 }
@@ -269,16 +331,44 @@ function PopulationGraph({ points }: { points: VisualPoint[] }) {
   const sx = (x: number) => pad + ((x - minYear) / Math.max(1e-6, maxYear - minYear)) * (w - pad * 2);
   const sy = (y: number) => h - pad - ((y - minPop) / Math.max(1e-6, maxPop - minPop)) * (h - pad * 2);
   const d = points.map((p, i) => `${i === 0 ? "M" : "L"} ${sx(p.year)} ${sy(p.population_total)}`).join(" ");
+  const xTicks = 5;
+  const yTicks = 5;
 
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="viz">
-      <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke="#7c8a7c" />
-      <line x1={pad} y1={pad} x2={pad} y2={h - pad} stroke="#7c8a7c" />
-      <path d={d} fill="none" stroke="#245a9b" strokeWidth={2} />
-      <text x={pad} y={14} fontSize="10" fill="#4f5c4f">
+      <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke="var(--viz-axis)" />
+      <line x1={pad} y1={pad} x2={pad} y2={h - pad} stroke="var(--viz-axis)" />
+      {Array.from({ length: xTicks + 1 }).map((_, i) => {
+        const t = i / xTicks;
+        const x = pad + t * (w - pad * 2);
+        const yr = minYear + t * (maxYear - minYear);
+        return (
+          <g key={`xt-${i}`}>
+            <line x1={x} y1={h - pad} x2={x} y2={h - pad + 4} stroke="var(--viz-axis)" />
+            <text x={x - 8} y={h - pad + 15} fontSize="9" fill="var(--viz-text)">
+              {Math.round(yr)}
+            </text>
+          </g>
+        );
+      })}
+      {Array.from({ length: yTicks + 1 }).map((_, i) => {
+        const t = i / yTicks;
+        const y = h - pad - t * (h - pad * 2);
+        const pv = minPop + t * (maxPop - minPop);
+        return (
+          <g key={`yt-${i}`}>
+            <line x1={pad - 4} y1={y} x2={pad} y2={y} stroke="var(--viz-axis)" />
+            <text x={2} y={y + 3} fontSize="9" fill="var(--viz-text)">
+              {Math.round(pv)}
+            </text>
+          </g>
+        );
+      })}
+      <path d={d} fill="none" stroke="var(--viz-line)" strokeWidth={2} />
+      <text x={pad} y={14} fontSize="10" fill="var(--viz-text)">
         Pop max: {Math.round(maxPop)}
       </text>
-      <text x={w - 110} y={h - 8} fontSize="10" fill="#4f5c4f">
+      <text x={w - 110} y={h - 8} fontSize="10" fill="var(--viz-text)">
         Year {minYear} to {maxYear}
       </text>
     </svg>

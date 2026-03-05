@@ -10,9 +10,49 @@ fn main() {
         }
     };
 
-    let result = mabm::run_mvp_simulation(&cfg.mvp, cfg.coupling, Some(&config_hash));
     let out_dir = std::path::Path::new("outputs");
     std::fs::create_dir_all(out_dir).expect("create outputs directory");
+    let live_progress_path = out_dir.join("live_progress.json");
+    let _ = std::fs::remove_file(&live_progress_path);
+    let result = mabm::run_mvp_simulation_with_progress(
+        &cfg.mvp,
+        cfg.coupling,
+        Some(&config_hash),
+        cfg.mvp.gui.live_update_every_ticks,
+        |state| {
+            let settlement_rows = mabm::collect_settlement_snapshot_rows(state);
+            let latest_settlements: Vec<_> = settlement_rows
+                .iter()
+                .map(|r| {
+                    serde_json::json!({
+                        "tick": r.tick,
+                        "year": r.year,
+                        "settlement_id": r.settlement_id,
+                        "grid_q": r.grid_q,
+                        "grid_r": r.grid_r,
+                        "population_total": r.population_total,
+                        "is_active": r.is_active,
+                        "status": r.status,
+                    })
+                })
+                .collect();
+            let pop_total: u64 = state
+                .settlements
+                .values()
+                .map(|s| s.population as u64)
+                .sum::<u64>();
+            let payload = serde_json::json!({
+                "run_id": state.version.run_id,
+                "tick": state.tick,
+                "year": state.tick as f32 / 4.0,
+                "population_total": pop_total,
+                "settlements_latest": latest_settlements
+            });
+            if let Ok(body) = serde_json::to_string_pretty(&payload) {
+                let _ = std::fs::write(&live_progress_path, body);
+            }
+        },
+    );
     let mut baseline_metrics_path: Option<std::path::PathBuf> = None;
     let mut deposition_path: Option<std::path::PathBuf> = None;
     let mut network_path: Option<std::path::PathBuf> = None;
@@ -176,4 +216,5 @@ fn main() {
     let run_index_path = out_dir.join("run_index.json");
     mabm::upsert_run_index(run_index_path, index_entry).expect("update run index");
     println!("manifest: file={}", manifest_path.display());
+    let _ = std::fs::remove_file(&live_progress_path);
 }
