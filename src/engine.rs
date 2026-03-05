@@ -516,8 +516,8 @@ impl TickEngine {
             let pop0 = settlement.population;
             let popf = pop0 as f32;
 
-            let base_birth_rate_annual = 0.033_f32;
-            let base_death_rate_annual = 0.021_f32;
+            let base_birth_rate_annual = state.demography_policy.annual_birth_rate.max(0.0);
+            let base_death_rate_annual = state.demography_policy.annual_death_rate.max(0.0);
             let season_birth_factor = match season {
                 Season::Spring => 1.10,
                 Season::Summer => 1.00,

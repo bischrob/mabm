@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     climate::{generate_pdsi_series, SyntheticClimateConfig},
+    demography::derive_rates_from_life_table_csv,
     engine::{CouplingConfig, TickEngine},
     metrics::{BaselineMetricRow, MetricTracker},
     model::{
@@ -34,6 +35,8 @@ pub struct MvpRunConfig {
     pub mechanisms: MechanismToggleConfig,
     #[serde(default)]
     pub metrics: MetricsConfig,
+    #[serde(default)]
+    pub demography: DemographyConfig,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -70,6 +73,26 @@ impl Default for MvpRunConfig {
             validation_outputs: ValidationOutputConfig::default(),
             mechanisms: MechanismToggleConfig::default(),
             metrics: MetricsConfig::default(),
+            demography: DemographyConfig::default(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct DemographyConfig {
+    pub use_life_table_default: bool,
+    pub life_table_csv_path: String,
+    pub annual_birth_rate_override: Option<f32>,
+    pub annual_death_rate_override: Option<f32>,
+}
+
+impl Default for DemographyConfig {
+    fn default() -> Self {
+        Self {
+            use_life_table_default: true,
+            life_table_csv_path: "input/neolithicdemographytable.csv".to_string(),
+            annual_birth_rate_override: None,
+            annual_death_rate_override: None,
         }
     }
 }
@@ -201,6 +224,22 @@ pub fn build_synthetic_state(cfg: &MvpRunConfig) -> SimulationState {
     sim.mechanism_toggles.cultural_transmission = cfg.mechanisms.cultural_transmission;
     sim.mechanism_toggles.water_quality_disease_coupling =
         cfg.mechanisms.water_quality_disease_coupling;
+    let mut annual_birth_rate = sim.demography_policy.annual_birth_rate;
+    let mut annual_death_rate = sim.demography_policy.annual_death_rate;
+    if cfg.demography.use_life_table_default {
+        if let Ok(derived) = derive_rates_from_life_table_csv(&cfg.demography.life_table_csv_path) {
+            annual_birth_rate = derived.annual_birth_rate;
+            annual_death_rate = derived.annual_death_rate;
+        }
+    }
+    if let Some(v) = cfg.demography.annual_birth_rate_override {
+        annual_birth_rate = v;
+    }
+    if let Some(v) = cfg.demography.annual_death_rate_override {
+        annual_death_rate = v;
+    }
+    sim.demography_policy.annual_birth_rate = annual_birth_rate.max(0.0);
+    sim.demography_policy.annual_death_rate = annual_death_rate.max(0.0);
 
     for sid in 0..cfg.settlement_count {
         let population = cfg.base_population + (rng.next_u32() % 80);

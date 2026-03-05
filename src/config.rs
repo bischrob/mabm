@@ -162,6 +162,25 @@ pub fn validate_config(cfg: &AppConfig) -> Result<(), ConfigError> {
             "mvp.metrics.network_min_weight must be within [0.0, 1.0]".to_string(),
         ));
     }
+    if cfg.mvp.demography.life_table_csv_path.trim().is_empty() {
+        return Err(ConfigError::Validation(
+            "mvp.demography.life_table_csv_path must be non-empty".to_string(),
+        ));
+    }
+    if let Some(v) = cfg.mvp.demography.annual_birth_rate_override {
+        if !(0.0..=1.0).contains(&v) {
+            return Err(ConfigError::Validation(
+                "mvp.demography.annual_birth_rate_override must be within [0.0, 1.0]".to_string(),
+            ));
+        }
+    }
+    if let Some(v) = cfg.mvp.demography.annual_death_rate_override {
+        if !(0.0..=1.0).contains(&v) {
+            return Err(ConfigError::Validation(
+                "mvp.demography.annual_death_rate_override must be within [0.0, 1.0]".to_string(),
+            ));
+        }
+    }
     if let Some(sweep) = &cfg.sweep {
         if sweep.enabled {
             if sweep.ranges.sigma_seed_values.is_empty()

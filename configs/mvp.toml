@@ -57,6 +57,10 @@ enable_baseline_metrics = true
 aggregation_threshold = 200
 network_min_weight = 0.20
 
+[mvp.demography]
+use_life_table_default = true
+life_table_csv_path = "input/neolithicdemographytable.csv"
+
 [coupling.stress_weights]
 food = 0.30
 water = 0.25

@@ -48,3 +48,15 @@ Life expectancy tables must be customizable, similar to GIS inputs:
 
 - Start with one baseline premodern mortality table.
 - Implement external table loading in MVP so demographic assumptions are not hard-coded.
+
+## Current Default (Implemented)
+
+1. Default demographic baseline file:
+   - `input/neolithicdemographytable.csv`
+2. Default behavior:
+   - `mvp.demography.use_life_table_default = true` uses this table automatically.
+   - If a custom path is provided, the same derivation pipeline is applied.
+3. `FB(X)` interpretation:
+   - `FB(X)` is treated as annual age-specific fertility rate for female offspring.
+   - Under sex parity, total fertility is approximately `2 * FB(X)`.
+   - In crude per-capita birth-rate derivation, this simplifies to weighting `FB(X)` by population age share.

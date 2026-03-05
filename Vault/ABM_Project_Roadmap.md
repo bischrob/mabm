@@ -98,6 +98,10 @@ Goal:
    - Vite frontend scaffold for run management and manifest viewing
    - thin API wrapper that executes Rust CLI runs
    - run manifest/index contract for GUI discovery (`outputs/run_index.json`)
+23. `[x]` Life-table default demography baseline implemented:
+   - `input/neolithicdemographytable.csv` as default demographic baseline
+   - `FB(X)` interpreted as female-offspring ASFR (`total ~ 2 * FB(X)` under sex parity)
+   - configurable overrides supported in `mvp.demography`
 
 ## In Progress (Current MVP Build)
 

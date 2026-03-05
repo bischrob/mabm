@@ -4,6 +4,7 @@
 
 pub mod climate;
 pub mod config;
+pub mod demography;
 pub mod engine;
 pub mod manifest;
 pub mod metrics;
@@ -15,6 +16,7 @@ pub mod utils;
 pub mod versioning;
 
 pub use config::{load_config_with_hash, validate_config, AppConfig, ConfigError};
+pub use demography::{derive_rates_from_life_table_csv, DerivedDemographyRates};
 pub use engine::{CouplingConfig, TickEngine};
 pub use manifest::{
     relative_or_absolute_string, upsert_run_index, write_run_manifest, RunIndexEntry, RunManifest,
@@ -758,5 +760,25 @@ mod tests {
         assert!(rec.suggested_target_population_total >= 100.0);
         assert!(rec.suggested_target_population_total <= 300.0);
         assert!(rec.suggested_scale_population >= cfg.min_population_scale);
+    }
+
+    #[test]
+    fn neolithic_life_table_derives_demography_rates() {
+        let rates = crate::derive_rates_from_life_table_csv("input/neolithicdemographytable.csv")
+            .expect("derive rates from life table");
+        assert!(rates.annual_birth_rate > 0.05);
+        assert!(rates.annual_birth_rate < 0.10);
+        assert!(rates.annual_death_rate > 0.04);
+        assert!(rates.annual_death_rate < 0.08);
+    }
+
+    #[test]
+    fn synthetic_state_uses_life_table_demography_by_default() {
+        let cfg = crate::MvpRunConfig::default();
+        let sim = crate::build_synthetic_state(&cfg);
+        assert!(sim.demography_policy.annual_birth_rate > 0.05);
+        assert!(sim.demography_policy.annual_birth_rate < 0.10);
+        assert!(sim.demography_policy.annual_death_rate > 0.04);
+        assert!(sim.demography_policy.annual_death_rate < 0.08);
     }
 }

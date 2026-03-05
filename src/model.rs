@@ -131,6 +131,21 @@ impl Default for CulturalPolicy {
 }
 
 #[derive(Clone, Debug)]
+pub struct DemographyPolicy {
+    pub annual_birth_rate: f32,
+    pub annual_death_rate: f32,
+}
+
+impl Default for DemographyPolicy {
+    fn default() -> Self {
+        Self {
+            annual_birth_rate: 0.033,
+            annual_death_rate: 0.021,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct MechanismToggles {
     pub seed_tax_storage: bool,
     pub threat_defensibility: bool,
@@ -220,6 +235,7 @@ pub struct SimulationState {
     pub storage_policy: StoragePolicy,
     pub threat_policy: ThreatPolicy,
     pub cultural_policy: CulturalPolicy,
+    pub demography_policy: DemographyPolicy,
     pub mechanism_toggles: MechanismToggles,
     pub regional_threat_index: f32,
     pub simulation_seed: u64,
@@ -236,6 +252,7 @@ impl Default for SimulationState {
             storage_policy: StoragePolicy::default(),
             threat_policy: ThreatPolicy::default(),
             cultural_policy: CulturalPolicy::default(),
+            demography_policy: DemographyPolicy::default(),
             mechanism_toggles: MechanismToggles::default(),
             regional_threat_index: 0.0,
             simulation_seed: 0,
