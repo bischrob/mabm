@@ -95,18 +95,16 @@ export function App() {
         .then((r) => r.json())
         .then((lp) => {
           if (lp && Array.isArray(lp.settlements_latest)) {
+            const lpRunId = String(lp.run_id ?? "");
             setVisuals((prev) => {
+              const isSameRun = prev?.run_id && prev.run_id === lpRunId;
               const base = prev?.population_series ?? [];
               const year = Number(lp.year ?? 0);
               const pop = Number(lp.population_total ?? 0);
-              const nextSeries =
-                base.length > 0 && Math.abs(base[base.length - 1].year - year) < 1e-6
-                  ? base.map((p, i) =>
-                      i === base.length - 1 ? { year, population_total: pop } : p
-                    )
-                  : [...base, { year, population_total: pop }];
+              const merged = isSameRun ? [...base, { year, population_total: pop }] : [{ year, population_total: pop }];
+              const nextSeries = normalizeSeries(merged);
               return {
-                run_id: String(lp.run_id ?? prev?.run_id ?? ""),
+                run_id: lpRunId || prev?.run_id || "",
                 latest_tick: Number(lp.tick ?? prev?.latest_tick ?? 0),
                 settlements_latest: lp.settlements_latest,
                 population_series: nextSeries
@@ -140,6 +138,7 @@ export function App() {
     setRunning(true);
     setRunLog("");
     try {
+      setVisuals(null);
       const res = await fetch("/api/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -318,16 +317,18 @@ function HexGridMap({ settlements }: { settlements: VisualSettlement[] }) {
 }
 
 function PopulationGraph({ points }: { points: VisualPoint[] }) {
-  if (points.length < 2) {
+  const normalized = normalizeSeries(points);
+  if (normalized.length < 2) {
     return <div>Not enough baseline metric points.</div>;
   }
   const w = 540;
   const h = 220;
   const pad = 28;
-  const minYear = Math.min(...points.map((p) => p.year));
-  const maxYear = Math.max(...points.map((p) => p.year));
-  const rawMinPop = Math.min(...points.map((p) => p.population_total));
-  const rawMaxPop = Math.max(...points.map((p) => p.population_total), 1);
+  const minYearObserved = Math.min(...normalized.map((p) => p.year));
+  const minYear = Math.min(0, minYearObserved);
+  const maxYear = Math.max(...normalized.map((p) => p.year));
+  const rawMinPop = Math.min(...normalized.map((p) => p.population_total));
+  const rawMaxPop = Math.max(...normalized.map((p) => p.population_total), 1);
   const popSpan = Math.max(1, rawMaxPop - rawMinPop);
   const minPop = Math.max(0, rawMinPop - popSpan * 0.1);
   const maxPop = rawMaxPop + popSpan * 0.1;
@@ -335,7 +336,7 @@ function PopulationGraph({ points }: { points: VisualPoint[] }) {
     pad + ((x - minYear) / Math.max(1e-6, maxYear - minYear)) * (w - pad * 2);
   const sy = (y: number) =>
     h - pad - ((y - minPop) / Math.max(1e-6, maxPop - minPop)) * (h - pad * 2);
-  const d = points
+  const dNorm = normalized
     .map((p, i) => `${i === 0 ? "M" : "L"} ${sx(p.year)} ${sy(p.population_total)}`)
     .join(" ");
   const xTicks = 5;
@@ -371,7 +372,7 @@ function PopulationGraph({ points }: { points: VisualPoint[] }) {
           </g>
         );
       })}
-      <path d={d} fill="none" stroke="var(--viz-line)" strokeWidth={2} />
+      <path d={dNorm} fill="none" stroke="var(--viz-line)" strokeWidth={2} />
       <text x={pad} y={14} fontSize="10" fill="var(--viz-text)">
         Pop max: {Math.round(maxPop)}
       </text>
@@ -387,6 +388,17 @@ function formatTick(v: number): string {
   if (Math.abs(v) >= 100) return v.toFixed(0);
   if (Math.abs(v) >= 10) return v.toFixed(1);
   return v.toFixed(2);
+}
+
+function normalizeSeries(points: VisualPoint[]): VisualPoint[] {
+  const sorted = [...points].sort((a, b) => a.year - b.year);
+  const byYear = new Map<number, number>();
+  for (const p of sorted) {
+    byYear.set(Number(p.year.toFixed(6)), p.population_total);
+  }
+  return [...byYear.entries()]
+    .map(([year, population_total]) => ({ year, population_total }))
+    .sort((a, b) => a.year - b.year);
 }
 
 function hexPoints(cx: number, cy: number, size: number): string[] {
