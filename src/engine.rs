@@ -81,6 +81,14 @@ impl TickEngine {
     }
 
     fn update_regional_threat_and_defensive_burden(&self, state: &mut SimulationState) {
+        if !state.mechanism_toggles.threat_defensibility {
+            state.regional_threat_index = 0.0;
+            for settlement in state.settlements.values_mut() {
+                settlement.burden_multiplier = 1.0;
+            }
+            return;
+        }
+
         if state.settlements.is_empty() {
             state.regional_threat_index = 0.0;
             return;
@@ -157,6 +165,7 @@ impl TickEngine {
 
     fn update_food_and_storage(&self, state: &mut SimulationState, _season: Season) {
         let policy = &state.storage_policy;
+        let seed_tax_enabled = state.mechanism_toggles.seed_tax_storage;
         for settlement in state.settlements.values_mut() {
             // Seed reservation exists to prevent unrealistic full-harvest consumption,
             // which would erase agricultural persistence after bad years.
@@ -167,7 +176,11 @@ impl TickEngine {
                 (settlement.food.stores_kcal * (1.0 - policy.spoilage_rate)).max(0.0);
 
             let gross_yield = settlement.food.yield_kcal * settlement.food.next_yield_multiplier.max(0.0);
-            settlement.food.seed_reserve_kcal = (gross_yield * policy.sigma_seed).max(0.0);
+            settlement.food.seed_reserve_kcal = if seed_tax_enabled {
+                (gross_yield * policy.sigma_seed).max(0.0)
+            } else {
+                0.0
+            };
             let usable_yield = (gross_yield - settlement.food.seed_reserve_kcal).max(0.0);
 
             let available_without_seed = usable_yield + settlement.food.stores_kcal;
@@ -184,7 +197,7 @@ impl TickEngine {
             let mut available = available_without_seed;
             let mut shortfall = required - available_without_seed;
 
-            if policy.allow_seed_draw && settlement.food.seed_reserve_kcal > 0.0 {
+            if seed_tax_enabled && policy.allow_seed_draw && settlement.food.seed_reserve_kcal > 0.0 {
                 let seed_draw = shortfall.min(settlement.food.seed_reserve_kcal);
                 let consumed_seed_fraction = seed_draw / settlement.food.seed_reserve_kcal;
                 available += seed_draw;
@@ -210,8 +223,11 @@ impl TickEngine {
         for settlement in state.settlements.values_mut() {
             // Water quality coupling exists because contaminated access pathways can
             // amplify disease dynamics even without global contact changes.
-            settlement.disease.beta_water_multiplier =
-                1.0 + (1.0 - settlement.water.quality) * 0.5;
+            settlement.disease.beta_water_multiplier = if state.mechanism_toggles.water_quality_disease_coupling {
+                1.0 + (1.0 - settlement.water.quality) * 0.5
+            } else {
+                1.0
+            };
         }
     }
 
@@ -236,6 +252,9 @@ impl TickEngine {
     }
 
     fn update_cultural_transmission(&self, state: &mut SimulationState, _season: Season) {
+        if !state.mechanism_toggles.cultural_transmission {
+            return;
+        }
         if state.settlements.is_empty() {
             return;
         }

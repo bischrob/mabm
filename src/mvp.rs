@@ -29,6 +29,8 @@ pub struct MvpRunConfig {
     pub culture: CultureConfig,
     #[serde(default)]
     pub validation_outputs: ValidationOutputConfig,
+    #[serde(default)]
+    pub mechanisms: MechanismToggleConfig,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -63,6 +65,7 @@ impl Default for MvpRunConfig {
             threat: ThreatConfig::default(),
             culture: CultureConfig::default(),
             validation_outputs: ValidationOutputConfig::default(),
+            mechanisms: MechanismToggleConfig::default(),
         }
     }
 }
@@ -126,6 +129,25 @@ impl Default for ValidationOutputConfig {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct MechanismToggleConfig {
+    pub seed_tax_storage: bool,
+    pub threat_defensibility: bool,
+    pub cultural_transmission: bool,
+    pub water_quality_disease_coupling: bool,
+}
+
+impl Default for MechanismToggleConfig {
+    fn default() -> Self {
+        Self {
+            seed_tax_storage: true,
+            threat_defensibility: true,
+            cultural_transmission: true,
+            water_quality_disease_coupling: true,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct MvpRunResult {
     pub final_state: SimulationState,
@@ -152,6 +174,10 @@ pub fn build_synthetic_state(cfg: &MvpRunConfig) -> SimulationState {
     sim.cultural_policy.prestige_rate = cfg.culture.prestige_rate;
     sim.cultural_policy.jitter_scale = cfg.culture.jitter_scale;
     sim.cultural_policy.max_trait_step_per_tick = cfg.culture.max_trait_step_per_tick;
+    sim.mechanism_toggles.seed_tax_storage = cfg.mechanisms.seed_tax_storage;
+    sim.mechanism_toggles.threat_defensibility = cfg.mechanisms.threat_defensibility;
+    sim.mechanism_toggles.cultural_transmission = cfg.mechanisms.cultural_transmission;
+    sim.mechanism_toggles.water_quality_disease_coupling = cfg.mechanisms.water_quality_disease_coupling;
 
     for sid in 0..cfg.settlement_count {
         let population = cfg.base_population + (rng.next_u32() % 80);

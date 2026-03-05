@@ -130,6 +130,25 @@ impl Default for CulturalPolicy {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct MechanismToggles {
+    pub seed_tax_storage: bool,
+    pub threat_defensibility: bool,
+    pub cultural_transmission: bool,
+    pub water_quality_disease_coupling: bool,
+}
+
+impl Default for MechanismToggles {
+    fn default() -> Self {
+        Self {
+            seed_tax_storage: true,
+            threat_defensibility: true,
+            cultural_transmission: true,
+            water_quality_disease_coupling: true,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct DiseaseState {
     pub susceptible: u32,
@@ -192,6 +211,7 @@ pub struct SimulationState {
     pub storage_policy: StoragePolicy,
     pub threat_policy: ThreatPolicy,
     pub cultural_policy: CulturalPolicy,
+    pub mechanism_toggles: MechanismToggles,
     pub regional_threat_index: f32,
     pub simulation_seed: u64,
     pub settlements: HashMap<SettlementId, SettlementState>,
@@ -206,6 +226,7 @@ impl Default for SimulationState {
             storage_policy: StoragePolicy::default(),
             threat_policy: ThreatPolicy::default(),
             cultural_policy: CulturalPolicy::default(),
+            mechanism_toggles: MechanismToggles::default(),
             regional_threat_index: 0.0,
             simulation_seed: 0,
             settlements: HashMap::new(),

@@ -167,6 +167,11 @@ pub fn validate_config(cfg: &AppConfig) -> Result<(), ConfigError> {
                     "sweep.snapshot_every must be > 0".to_string(),
                 ));
             }
+            if sweep.knockout_variants.is_empty() {
+                return Err(ConfigError::Validation(
+                    "enabled sweep requires at least one knockout variant".to_string(),
+                ));
+            }
         }
     }
     Ok(())

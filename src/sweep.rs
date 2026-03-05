@@ -13,6 +13,8 @@ pub struct SweepConfig {
     pub seed_policy: SeedPolicy,
     #[serde(default)]
     pub ranges: SweepRanges,
+    #[serde(default = "default_knockout_variants")]
+    pub knockout_variants: Vec<KnockoutMode>,
 }
 
 impl Default for SweepConfig {
@@ -22,8 +24,23 @@ impl Default for SweepConfig {
             snapshot_every: 1,
             seed_policy: SeedPolicy::Incremental { start: 1000 },
             ranges: SweepRanges::default(),
+            knockout_variants: default_knockout_variants(),
         }
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum KnockoutMode {
+    None,
+    NoSeedTaxStorage,
+    NoThreatDefensibility,
+    NoCulturalTransmission,
+    NoWaterQualityDiseaseCoupling,
+}
+
+fn default_knockout_variants() -> Vec<KnockoutMode> {
+    vec![KnockoutMode::None]
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -75,6 +92,7 @@ pub struct SweepSummaryRow {
     pub scenario_id: String,
     pub run_index: u32,
     pub seed: u64,
+    pub knockout: String,
     pub sigma_seed: f32,
     pub defensibility_cost_k: f32,
     pub prestige_rate: f32,
@@ -99,48 +117,52 @@ pub fn run_sweep(cfg: &AppConfig) -> Vec<SweepSummaryRow> {
     for sigma_seed in &sweep.ranges.sigma_seed_values {
         for defensibility_cost_k in &sweep.ranges.defensibility_cost_values {
             for prestige_rate in &sweep.ranges.prestige_rate_values {
-                let seed = seed_iter.next(run_index);
-                let mut mvp: MvpRunConfig = cfg.mvp.clone();
-                mvp.seed = seed;
-                mvp.storage.sigma_seed = *sigma_seed;
-                mvp.threat.defensibility_cost_k = *defensibility_cost_k;
-                mvp.culture.prestige_rate = *prestige_rate;
+                for knockout in &sweep.knockout_variants {
+                    let seed = seed_iter.next(run_index);
+                    let mut mvp: MvpRunConfig = cfg.mvp.clone();
+                    mvp.seed = seed;
+                    mvp.storage.sigma_seed = *sigma_seed;
+                    mvp.threat.defensibility_cost_k = *defensibility_cost_k;
+                    mvp.culture.prestige_rate = *prestige_rate;
+                    apply_knockout(&mut mvp, knockout);
 
-                let result = run_mvp_simulation(&mvp, cfg.coupling, None);
-                let settlement_count = result.final_state.settlements.len() as u32;
-                let final_population_total = result
-                    .final_state
-                    .settlements
-                    .values()
-                    .map(|s| s.population as u64)
-                    .sum::<u64>();
-                let mean_stress_composite = if settlement_count == 0 {
-                    0.0
-                } else {
-                    result
+                    let result = run_mvp_simulation(&mvp, cfg.coupling, None);
+                    let settlement_count = result.final_state.settlements.len() as u32;
+                    let final_population_total = result
                         .final_state
                         .settlements
                         .values()
-                        .map(|s| s.stress_composite)
-                        .sum::<f32>()
-                        / settlement_count as f32
-                };
+                        .map(|s| s.population as u64)
+                        .sum::<u64>();
+                    let mean_stress_composite = if settlement_count == 0 {
+                        0.0
+                    } else {
+                        result
+                            .final_state
+                            .settlements
+                            .values()
+                            .map(|s| s.stress_composite)
+                            .sum::<f32>()
+                            / settlement_count as f32
+                    };
 
-                rows.push(SweepSummaryRow {
-                    scenario_id: cfg.scenario_id.clone(),
-                    run_index,
-                    seed,
-                    sigma_seed: *sigma_seed,
-                    defensibility_cost_k: *defensibility_cost_k,
-                    prestige_rate: *prestige_rate,
-                    final_population_total,
-                    mean_stress_composite,
-                    settlement_count,
-                    trait_rows: result.trait_rows.len(),
-                    deposition_rows: result.deposition_rows.len(),
-                    network_rows: result.network_rows.len(),
-                });
-                run_index += 1;
+                    rows.push(SweepSummaryRow {
+                        scenario_id: cfg.scenario_id.clone(),
+                        run_index,
+                        seed,
+                        knockout: knockout_label(knockout).to_string(),
+                        sigma_seed: *sigma_seed,
+                        defensibility_cost_k: *defensibility_cost_k,
+                        prestige_rate: *prestige_rate,
+                        final_population_total,
+                        mean_stress_composite,
+                        settlement_count,
+                        trait_rows: result.trait_rows.len(),
+                        deposition_rows: result.deposition_rows.len(),
+                        network_rows: result.network_rows.len(),
+                    });
+                    run_index += 1;
+                }
             }
         }
     }
@@ -158,6 +180,28 @@ pub fn run_sweep(cfg: &AppConfig) -> Vec<SweepSummaryRow> {
             .collect()
     } else {
         rows
+    }
+}
+
+fn apply_knockout(mvp: &mut MvpRunConfig, knockout: &KnockoutMode) {
+    match knockout {
+        KnockoutMode::None => {}
+        KnockoutMode::NoSeedTaxStorage => mvp.mechanisms.seed_tax_storage = false,
+        KnockoutMode::NoThreatDefensibility => mvp.mechanisms.threat_defensibility = false,
+        KnockoutMode::NoCulturalTransmission => mvp.mechanisms.cultural_transmission = false,
+        KnockoutMode::NoWaterQualityDiseaseCoupling => {
+            mvp.mechanisms.water_quality_disease_coupling = false
+        }
+    }
+}
+
+fn knockout_label(k: &KnockoutMode) -> &'static str {
+    match k {
+        KnockoutMode::None => "none",
+        KnockoutMode::NoSeedTaxStorage => "no_seed_tax_storage",
+        KnockoutMode::NoThreatDefensibility => "no_threat_defensibility",
+        KnockoutMode::NoCulturalTransmission => "no_cultural_transmission",
+        KnockoutMode::NoWaterQualityDiseaseCoupling => "no_water_quality_disease_coupling",
     }
 }
 
@@ -197,4 +241,3 @@ impl<'a> SeedIterator<'a> {
         }
     }
 }
-

@@ -24,7 +24,9 @@ pub use output::{
     write_network_snapshot_csv, write_trait_deposition_csv, write_trait_frequency_csv,
     NetworkInteractionSnapshotRow, SettlementTraitDepositionRow, SettlementTraitFrequencyRow,
 };
-pub use sweep::{run_sweep, write_sweep_summary_csv, SeedPolicy, SweepConfig, SweepSummaryRow};
+pub use sweep::{
+    run_sweep, write_sweep_summary_csv, KnockoutMode, SeedPolicy, SweepConfig, SweepSummaryRow,
+};
 pub use versioning::RunVersion;
 
 #[cfg(test)]
@@ -282,8 +284,36 @@ mod tests {
                 defensibility_cost_values: vec![0.5],
                 prestige_rate_values: vec![0.03, 0.08],
             },
+            knockout_variants: vec![crate::KnockoutMode::None],
         });
         let rows = crate::run_sweep(&app);
         assert_eq!(rows.len(), 4);
+    }
+
+    #[test]
+    fn knockout_can_disable_cultural_transmission() {
+        let mut cfg = crate::MvpRunConfig {
+            ticks: 2,
+            snapshot_every_ticks: 1,
+            settlement_count: 1,
+            base_population: 100,
+            seed: 21,
+            ..crate::MvpRunConfig::default()
+        };
+        cfg.mechanisms.cultural_transmission = false;
+        let before = crate::build_synthetic_state(&cfg);
+        let before_counts = before
+            .settlements
+            .get(&1)
+            .expect("settlement exists")
+            .trait_household_counts;
+        let after = crate::run_mvp_simulation(&cfg, CouplingConfig::default(), None);
+        let after_counts = after
+            .final_state
+            .settlements
+            .get(&1)
+            .expect("settlement exists")
+            .trait_household_counts;
+        assert_eq!(before_counts, after_counts);
     }
 }

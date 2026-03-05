@@ -46,6 +46,12 @@ enable_network_snapshot = false
 deposition_rate_per_tick = 0.01
 network_min_weight = 0.20
 
+[mvp.mechanisms]
+seed_tax_storage = true
+threat_defensibility = true
+cultural_transmission = true
+water_quality_disease_coupling = true
+
 [coupling.stress_weights]
 food = 0.30
 water = 0.25
@@ -62,6 +68,7 @@ fuel_x_labor = 0.06
 [sweep]
 enabled = true
 snapshot_every = 1
+knockout_variants = ["none", "no_cultural_transmission", "no_threat_defensibility"]
 
 [sweep.seed_policy]
 type = "incremental"

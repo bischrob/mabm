@@ -62,6 +62,10 @@ Goal:
    - config-driven batch parameter runs
    - seed policy support (fixed/incremental/list)
    - sweep summary metric CSV output
+14. `[x]` Mechanism toggle system for knockout experiments implemented:
+   - config-driven mechanism toggles
+   - sweep knockout variants for baseline vs removed-mechanism comparisons
+   - summary outputs include knockout label
 
 ## In Progress (Current MVP Build)
 
@@ -75,14 +79,14 @@ Goal:
 
 ## Next (Highest Priority)
 
-1. `[ ]` Add mechanism toggle system for knockout experiments.
-
-## Next After That
-
 1. `[ ]` Add baseline metric pack:
    - population trend
    - aggregation/abandonment counts
    - network structure metrics
+
+## Next After That
+
+1. `[ ]` Add sweep-level fit scoring against target pattern metrics.
 
 ## MVP Acceptance Gate
 
