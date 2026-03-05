@@ -54,4 +54,20 @@ fn main() {
             net_path.display()
         );
     }
+
+    if let Some(sweep_cfg) = &cfg.sweep {
+        if sweep_cfg.enabled {
+            let rows = mabm::run_sweep(&cfg);
+            let sweep_path = out_dir.join(format!(
+                "{}_{}_sweep_summary.csv",
+                cfg.scenario_id, result.final_state.version.run_id
+            ));
+            mabm::write_sweep_summary_csv(&sweep_path, &rows).expect("write sweep summary");
+            println!(
+                "sweep output: rows={} file={}",
+                rows.len(),
+                sweep_path.display()
+            );
+        }
+    }
 }

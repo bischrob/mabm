@@ -3,7 +3,7 @@ use std::{fmt, fs, path::Path};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::{engine::CouplingConfig, mvp::MvpRunConfig};
+use crate::{engine::CouplingConfig, mvp::MvpRunConfig, sweep::SweepConfig};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct AppConfig {
@@ -11,6 +11,8 @@ pub struct AppConfig {
     pub mvp: MvpRunConfig,
     #[serde(default)]
     pub coupling: CouplingConfig,
+    #[serde(default)]
+    pub sweep: Option<SweepConfig>,
 }
 
 impl Default for AppConfig {
@@ -19,6 +21,7 @@ impl Default for AppConfig {
             scenario_id: "synthetic-baseline".to_string(),
             mvp: MvpRunConfig::default(),
             coupling: CouplingConfig::default(),
+            sweep: None,
         }
     }
 }
@@ -148,6 +151,23 @@ pub fn validate_config(cfg: &AppConfig) -> Result<(), ConfigError> {
         return Err(ConfigError::Validation(
             "mvp.validation_outputs.network_min_weight must be within [0.0, 1.0]".to_string(),
         ));
+    }
+    if let Some(sweep) = &cfg.sweep {
+        if sweep.enabled {
+            if sweep.ranges.sigma_seed_values.is_empty()
+                || sweep.ranges.defensibility_cost_values.is_empty()
+                || sweep.ranges.prestige_rate_values.is_empty()
+            {
+                return Err(ConfigError::Validation(
+                    "enabled sweep requires non-empty parameter value lists".to_string(),
+                ));
+            }
+            if sweep.snapshot_every == 0 {
+                return Err(ConfigError::Validation(
+                    "sweep.snapshot_every must be > 0".to_string(),
+                ));
+            }
+        }
     }
     Ok(())
 }

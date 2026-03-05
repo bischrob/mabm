@@ -58,6 +58,10 @@ Goal:
    - deposited trait accumulator snapshots
    - network interaction snapshot ledger
    - config-gated emission for validation runs only
+13. `[x]` Experiment runner for sweeps implemented:
+   - config-driven batch parameter runs
+   - seed policy support (fixed/incremental/list)
+   - sweep summary metric CSV output
 
 ## In Progress (Current MVP Build)
 
@@ -71,15 +75,11 @@ Goal:
 
 ## Next (Highest Priority)
 
-1. `[ ]` Build experiment runner for sweeps:
-   - batch runs
-   - seed policies
-   - summary metric outputs
+1. `[ ]` Add mechanism toggle system for knockout experiments.
 
 ## Next After That
 
-1. `[ ]` Add mechanism toggle system for knockout experiments.
-2. `[ ]` Add baseline metric pack:
+1. `[ ]` Add baseline metric pack:
    - population trend
    - aggregation/abandonment counts
    - network structure metrics

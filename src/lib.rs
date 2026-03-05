@@ -8,6 +8,7 @@ pub mod engine;
 pub mod model;
 pub mod mvp;
 pub mod output;
+pub mod sweep;
 pub mod utils;
 pub mod versioning;
 
@@ -23,6 +24,7 @@ pub use output::{
     write_network_snapshot_csv, write_trait_deposition_csv, write_trait_frequency_csv,
     NetworkInteractionSnapshotRow, SettlementTraitDepositionRow, SettlementTraitFrequencyRow,
 };
+pub use sweep::{run_sweep, write_sweep_summary_csv, SeedPolicy, SweepConfig, SweepSummaryRow};
 pub use versioning::RunVersion;
 
 #[cfg(test)]
@@ -263,5 +265,25 @@ mod tests {
         let result = crate::run_mvp_simulation(&cfg, CouplingConfig::default(), None);
         assert!(!result.deposition_rows.is_empty());
         assert!(!result.network_rows.is_empty());
+    }
+
+    #[test]
+    fn sweep_runner_emits_summary_rows() {
+        let mut app = crate::AppConfig::default();
+        app.mvp.ticks = 8;
+        app.mvp.snapshot_every_ticks = 4;
+        app.mvp.settlement_count = 5;
+        app.sweep = Some(crate::SweepConfig {
+            enabled: true,
+            snapshot_every: 1,
+            seed_policy: crate::SeedPolicy::Fixed { seed: 5 },
+            ranges: crate::sweep::SweepRanges {
+                sigma_seed_values: vec![0.1, 0.2],
+                defensibility_cost_values: vec![0.5],
+                prestige_rate_values: vec![0.03, 0.08],
+            },
+        });
+        let rows = crate::run_sweep(&app);
+        assert_eq!(rows.len(), 4);
     }
 }
