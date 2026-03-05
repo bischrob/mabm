@@ -3,6 +3,7 @@ scenario_id = "synthetic-baseline"
 [mvp]
 ticks = 400
 snapshot_every_ticks = 4
+hex_count = 300
 settlement_count = 10
 base_population = 100
 seed = 42
@@ -64,6 +65,9 @@ life_table_csv_path = "input/neolithicdemographytable.csv"
 [mvp.spatial]
 hex_diameter_km = 1.0
 flat_travel_km_per_day = 36.0
+population_capacity_per_hex = 500.0
+min_population_capacity_per_hex = 40.0
+stores_capacity_fraction = 0.20
 
 [mvp.gui]
 live_update_every_ticks = 0

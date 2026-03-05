@@ -18,6 +18,7 @@ pub struct RunManifestFiles {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct RunManifestSummary {
+    pub hex_count: usize,
     pub settlement_count: usize,
     pub trait_rows: usize,
     pub baseline_metric_rows: usize,

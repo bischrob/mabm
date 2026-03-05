@@ -15,12 +15,9 @@ pub fn infected_share(s: &SettlementState) -> f32 {
 }
 
 pub fn fuel_stress(s: &SettlementState) -> f32 {
-    let total = s.fuel.high_wood + s.fuel.low_wood + s.fuel.alt_fuel;
-    if total <= 0.0 {
-        return 1.0;
-    }
-    let high_share = s.fuel.high_wood / total;
-    clamp01(1.0 - high_share)
+    // Single-pool fuel stress proxy:
+    // 0.0 stress at >= 4k units, rising toward 1.0 as stock approaches zero.
+    clamp01(1.0 - (s.fuel.stock / 4_000.0))
 }
 
 pub fn labor_crowding(s: &SettlementState) -> f32 {

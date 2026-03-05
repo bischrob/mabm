@@ -82,9 +82,7 @@ mod tests {
                     quality: 0.0,
                 },
                 fuel: FuelState {
-                    high_wood: 0.0,
-                    low_wood: 1.0,
-                    alt_fuel: 1.0,
+                    stock: 2.0,
                 },
                 food: FoodState {
                     yield_kcal: 0.0,
@@ -420,9 +418,7 @@ mod tests {
                     quality: 1.0,
                 },
                 fuel: FuelState {
-                    high_wood: 1000.0,
-                    low_wood: 0.0,
-                    alt_fuel: 0.0,
+                    stock: 1000.0,
                 },
                 food: FoodState {
                     yield_kcal: 80_000_000.0,
@@ -461,9 +457,7 @@ mod tests {
                     quality: 0.1,
                 },
                 fuel: FuelState {
-                    high_wood: 0.0,
-                    low_wood: 10.0,
-                    alt_fuel: 0.0,
+                    stock: 10.0,
                 },
                 food: FoodState {
                     yield_kcal: 10_000.0,
@@ -513,9 +507,7 @@ mod tests {
                     quality: 0.2,
                 },
                 fuel: FuelState {
-                    high_wood: 0.0,
-                    low_wood: 1.0,
-                    alt_fuel: 0.0,
+                    stock: 1.0,
                 },
                 food: FoodState {
                     yield_kcal: 1_000.0,
@@ -551,9 +543,7 @@ mod tests {
                     quality: 1.0,
                 },
                 fuel: FuelState {
-                    high_wood: 1000.0,
-                    low_wood: 0.0,
-                    alt_fuel: 0.0,
+                    stock: 1000.0,
                 },
                 food: FoodState {
                     yield_kcal: 80_000_000.0,
@@ -627,9 +617,7 @@ mod tests {
                     quality: 1.0,
                 },
                 fuel: FuelState {
-                    high_wood: 1000.0,
-                    low_wood: 0.0,
-                    alt_fuel: 0.0,
+                    stock: 1000.0,
                 },
                 labor: LaborState {
                     seasonal_budget_hours: 5400.0,
@@ -660,9 +648,7 @@ mod tests {
                     quality: 1.0,
                 },
                 fuel: FuelState {
-                    high_wood: 1000.0,
-                    low_wood: 0.0,
-                    alt_fuel: 0.0,
+                    stock: 1000.0,
                 },
                 labor: LaborState {
                     seasonal_budget_hours: 5400.0,

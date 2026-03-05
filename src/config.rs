@@ -84,9 +84,19 @@ pub fn validate_config(cfg: &AppConfig) -> Result<(), ConfigError> {
             "mvp.snapshot_every_ticks must be <= mvp.ticks".to_string(),
         ));
     }
+    if cfg.mvp.hex_count == 0 {
+        return Err(ConfigError::Validation(
+            "mvp.hex_count must be > 0".to_string(),
+        ));
+    }
     if cfg.mvp.settlement_count == 0 {
         return Err(ConfigError::Validation(
             "mvp.settlement_count must be > 0".to_string(),
+        ));
+    }
+    if cfg.mvp.settlement_count > cfg.mvp.hex_count {
+        return Err(ConfigError::Validation(
+            "mvp.settlement_count must be <= mvp.hex_count".to_string(),
         ));
     }
     if cfg.mvp.base_population == 0 {
@@ -102,6 +112,26 @@ pub fn validate_config(cfg: &AppConfig) -> Result<(), ConfigError> {
     if cfg.mvp.spatial.flat_travel_km_per_day <= 0.0 {
         return Err(ConfigError::Validation(
             "mvp.spatial.flat_travel_km_per_day must be > 0.0".to_string(),
+        ));
+    }
+    if cfg.mvp.spatial.population_capacity_per_hex <= 0.0 {
+        return Err(ConfigError::Validation(
+            "mvp.spatial.population_capacity_per_hex must be > 0.0".to_string(),
+        ));
+    }
+    if cfg.mvp.spatial.min_population_capacity_per_hex <= 0.0 {
+        return Err(ConfigError::Validation(
+            "mvp.spatial.min_population_capacity_per_hex must be > 0.0".to_string(),
+        ));
+    }
+    if cfg.mvp.spatial.min_population_capacity_per_hex > cfg.mvp.spatial.population_capacity_per_hex {
+        return Err(ConfigError::Validation(
+            "mvp.spatial.min_population_capacity_per_hex must be <= mvp.spatial.population_capacity_per_hex".to_string(),
+        ));
+    }
+    if !(0.0..=1.0).contains(&cfg.mvp.spatial.stores_capacity_fraction) {
+        return Err(ConfigError::Validation(
+            "mvp.spatial.stores_capacity_fraction must be within [0.0, 1.0]".to_string(),
         ));
     }
     if !(0.0..=0.5).contains(&cfg.mvp.storage.sigma_seed) {

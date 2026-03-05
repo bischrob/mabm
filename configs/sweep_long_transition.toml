@@ -3,6 +3,7 @@ scenario_id = "synthetic-transition-long"
 [mvp]
 ticks = 2000
 snapshot_every_ticks = 20
+hex_count = 300
 settlement_count = 10
 base_population = 100
 seed = 42
@@ -16,14 +17,14 @@ cycle1_years = 18.0
 cycle1_amp = 1.1
 cycle2_years = 55.0
 cycle2_amp = 0.8
-shock_chance_per_year = 0.04
-shock_mean = -1.8
+shock_chance_per_year = 0.02
+shock_mean = -1.5
 shock_duration_years_min = 2
-shock_duration_years_max = 7
+shock_duration_years_max = 6
 
 [mvp.storage]
 sigma_seed = 0.10
-spoilage_rate = 0.04
+spoilage_rate = 0.05
 allow_seed_draw = true
 enable_emergency_reciprocity = true
 
@@ -31,7 +32,7 @@ enable_emergency_reciprocity = true
 drought_weight = 0.5
 conflict_weight = 0.3
 food_weight = 0.2
-defensibility_cost_k = 0.2
+defensibility_cost_k = 0.15
 
 [mvp.culture]
 neutral_drift_rate = 0.02
@@ -60,19 +61,22 @@ network_min_weight = 0.20
 [mvp.demography]
 use_life_table_default = true
 life_table_csv_path = "input/neolithicdemographytable.csv"
-annual_birth_rate_override = 0.078
-annual_death_rate_override = 0.053
+annual_birth_rate_override = 0.056
+annual_death_rate_override = 0.030
 
 [mvp.spatial]
 hex_diameter_km = 1.0
 flat_travel_km_per_day = 36.0
+population_capacity_per_hex = 500.0
+min_population_capacity_per_hex = 40.0
+stores_capacity_fraction = 0.20
 
 [mvp.gui]
 live_update_every_ticks = 0
 
 [mvp.resources]
-yield_multiplier = 1.10
-stores_multiplier = 1.05
+yield_multiplier = 1.20
+stores_multiplier = 1.02
 
 [coupling.stress_weights]
 food = 0.30

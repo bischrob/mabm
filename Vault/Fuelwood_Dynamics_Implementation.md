@@ -19,21 +19,19 @@ Important correction:
 
 ## Ideal Solution Under Current Constraints
 
-Use hex-level tiered fuel pools + settlement-level demand and hauling cost.
+Use a single hex-level fuel stock + settlement-level demand and hauling cost.
 
-### A) Fuel Pools (Hex Level)
+### A) Fuel Stock (Hex Level)
 
 Per hex `h`, tick `t`, maintain:
 
-1. `wood_high[h,t]` (e.g., pinyon/juniper)
-2. `wood_low[h,t]` (shrubs/brush)
-3. `alt_fuel[h,t]` (ag residues/dung proxies)
+1. `fuel_stock[h,t]` (aggregate thermal-equivalent biomass)
 
 Regeneration:
 
-- `B_{x,t+1} = B_{x,t} + r_x * B_{x,t} * (1 - B_{x,t}/K_x) - H_{x,t}`
+- `Fuel_{t+1} = Fuel_t + r * Fuel_t * (1 - Fuel_t/K) - H_t`
 
-with slow `r_x` for woodland fuels and faster `r_x` for low woody biomass.
+with `r` and `K` calibrated to local ecology and extraction pressure.
 
 ### B) Demand (Settlement/Household Level)
 
@@ -47,19 +45,11 @@ Where:
 2. `D_cook` rises with boiling-intensive diet share.
 3. `D_process` rises with craft intensity (e.g., ceramics output).
 
-### C) Substitution Logic (Tier Cascade)
+### C) Scarcity Logic (Single Pool)
 
-1. Attempt demand from `wood_high`.
-2. Shortfall cascades to `wood_low` with efficiency penalty.
-3. Remaining shortfall cascades to `alt_fuel` with larger penalty.
-
-Thermal-equivalent implementation:
-
-- Convert each pool to `kcal_heat_equiv`.
-- Substitutes require more mass per heat unit:
-  - `eff_high = 1.0`
-  - `eff_low < 1.0`
-  - `eff_alt << 1.0`
+1. Attempt demand from `fuel_stock`.
+2. If demand is unmet, apply scarcity penalty and hauling-distance increase.
+3. Feed unmet demand and hauling burden directly into stress/migration hazard.
 
 ### D) Hauling Cost Coupling
 
@@ -71,10 +61,10 @@ Use existing travel/load energetics (Pandolf/travel-cost module) and add to hous
 
 ### E) Pottery/Trade Coupling
 
-If household/settlement uses only low/alt fuels beyond threshold:
+If `fuel_stock` remains below craft threshold for multiple ticks:
 
 1. reduce ceramic production success probability.
-2. cap high-quality ceramic export volume.
+2. cap ceramic export volume.
 3. reduce/reweight trade edge reinforcement from ceramics.
 
 ## Decision Triggers
@@ -97,7 +87,7 @@ If persistent `push_fuel` exceeds threshold over `n` ticks, increase relocation/
 
 1. `fuel_demand_total`
 2. `fuel_met_fraction`
-3. `share_high_vs_low_vs_alt`
+3. `fuel_stock_level`
 4. `mean_gather_distance_km`
 5. `fuel_haul_energy_cost`
 6. `fuel_driven_migration_events`

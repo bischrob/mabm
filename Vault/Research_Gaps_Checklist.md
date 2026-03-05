@@ -31,8 +31,8 @@ Priority gaps not yet fully specified in current research stack:
 
 6. Firewood/fuel constraints:
    - Empirical priors for seasonal household fuel demand by diet, temperature, and craft intensity.
-   - Regeneration/depletion coefficients for high-wood vs low-wood pools and gather-distance response.
-   - Substitution efficiency/quality penalties and fuel-linked ceramic production thresholds.
+   - Regeneration/depletion coefficients for the single `fuel_stock` pool and gather-distance response.
+   - Scarcity penalty functions and fuel-linked ceramic production thresholds.
 
 7. Labor calendar and task competition:
    - Empirical priors for seasonal task-hour requirements and overlap severity.

@@ -6,7 +6,7 @@ use crate::{
     engine::{CouplingConfig, TickEngine},
     metrics::{BaselineMetricRow, MetricTracker},
     model::{
-        ClimateState, DiseaseState, FoodState, FuelState, LaborState, SettlementState,
+        ClimateState, DiseaseState, FoodState, FuelState, HexState, LaborState, SettlementState,
         SimulationState, WaterState, MVP_TRAIT_COUNT,
     },
     output::{collect_trait_frequency_rows, SettlementTraitFrequencyRow},
@@ -18,6 +18,7 @@ use crate::{
 pub struct MvpRunConfig {
     pub ticks: u32,
     pub snapshot_every_ticks: u32,
+    pub hex_count: u32,
     pub settlement_count: u32,
     pub base_population: u32,
     pub seed: u64,
@@ -69,6 +70,7 @@ impl Default for MvpRunConfig {
         Self {
             ticks: 40, // 10 years at seasonal resolution
             snapshot_every_ticks: 4,
+            hex_count: 300,
             settlement_count: 10,
             base_population: 100,
             seed: 42,
@@ -91,6 +93,11 @@ impl Default for MvpRunConfig {
 pub struct SpatialConfig {
     pub hex_diameter_km: f32,
     pub flat_travel_km_per_day: f32,
+    pub population_capacity_per_hex: f32,
+    #[serde(default = "default_min_population_capacity_per_hex")]
+    pub min_population_capacity_per_hex: f32,
+    #[serde(default = "default_stores_capacity_fraction")]
+    pub stores_capacity_fraction: f32,
 }
 
 impl Default for SpatialConfig {
@@ -98,8 +105,19 @@ impl Default for SpatialConfig {
         Self {
             hex_diameter_km: 18.0,
             flat_travel_km_per_day: 18.0,
+            population_capacity_per_hex: 3_000.0,
+            min_population_capacity_per_hex: default_min_population_capacity_per_hex(),
+            stores_capacity_fraction: default_stores_capacity_fraction(),
         }
     }
+}
+
+fn default_min_population_capacity_per_hex() -> f32 {
+    25.0
+}
+
+fn default_stores_capacity_fraction() -> f32 {
+    0.25
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -257,7 +275,9 @@ pub struct MvpRunResult {
 pub fn build_synthetic_state(cfg: &MvpRunConfig) -> SimulationState {
     let mut sim = SimulationState::default();
     let mut rng = Lcg::new(cfg.seed);
+    let hex_count = cfg.hex_count.max(cfg.settlement_count).max(1);
     sim.simulation_seed = cfg.seed;
+    sim.hex_count = hex_count;
     sim.climate_forcing_pdsi = generate_pdsi_series(cfg.ticks, &cfg.climate, cfg.seed);
     sim.storage_policy.sigma_seed = cfg.storage.sigma_seed;
     sim.storage_policy.spoilage_rate = cfg.storage.spoilage_rate;
@@ -295,42 +315,68 @@ pub fn build_synthetic_state(cfg: &MvpRunConfig) -> SimulationState {
     sim.demography_policy.annual_death_rate = annual_death_rate.max(0.0);
     sim.spatial_policy.hex_diameter_km = cfg.spatial.hex_diameter_km.max(0.01);
     sim.spatial_policy.flat_travel_km_per_day = cfg.spatial.flat_travel_km_per_day.max(0.01);
+    sim.spatial_policy.population_capacity_per_hex = cfg.spatial.population_capacity_per_hex.max(1.0);
+    sim.spatial_policy.min_population_capacity_per_hex =
+        cfg.spatial.min_population_capacity_per_hex.max(1.0);
+    sim.spatial_policy.stores_capacity_fraction = cfg.spatial.stores_capacity_fraction.clamp(0.0, 1.0);
+
+    // Hex-level heterogeneity exists so empty space has explicit environmental
+    // structure and can serve as meaningful migration/fission destinations.
+    for hid in 1..=hex_count {
+        let hex = HexState {
+            id: hid,
+            climate_local_multiplier: rng.next_f32_gaussian_clamped(1.0, 0.10, 0.75, 1.25),
+            climate_local_offset: rng.next_f32_gaussian_clamped(0.0, 0.25, -0.8, 0.8),
+            drought_index_5y: rng.next_f32_gaussian_clamped(0.5, 0.20, 0.0, 1.0),
+            water_reliability: rng.next_f32_gaussian_clamped(0.65, 0.15, 0.10, 1.0),
+            water_quality: rng.next_f32_gaussian_clamped(0.70, 0.15, 0.10, 1.0),
+            fuel_stock: rng.next_f32_gaussian_clamped(3_750.0, 900.0, 100.0, 8_000.0),
+            food_yield_kcal: rng.next_f32_gaussian_clamped(4.5e7, 1.2e7, 5.0e6, 1.2e8)
+                * cfg.resources.yield_multiplier.max(0.0),
+            food_stores_kcal: rng.next_f32_gaussian_clamped(3.0e7, 1.0e7, 0.0, 8.0e7)
+                * cfg.resources.stores_multiplier.max(0.0),
+            defensibility: rng.next_f32_gaussian_clamped(0.5, 0.20, 0.0, 1.0),
+        };
+        sim.hexes.insert(hid, hex);
+    }
 
     for sid in 0..cfg.settlement_count {
-        let population = cfg.base_population + (rng.next_u32() % 80);
+        // Keep initialization deterministic and interpretable for calibration runs.
+        let population = cfg.base_population;
         let households = (population / 5).max(1);
         let mut trait_household_counts = [0_u32; MVP_TRAIT_COUNT];
         for v in &mut trait_household_counts {
             *v = rng.next_u32() % households.max(1);
         }
 
+        let hex_id = 1 + ((sid as u64 * hex_count as u64) / cfg.settlement_count.max(1) as u64) as u32;
+        let hex = sim
+            .hexes
+            .get(&hex_id)
+            .expect("hex profile must exist for every settlement");
         sim.settlements.insert(
             sid + 1,
             SettlementState {
                 id: sid + 1,
-                hex_id: sid + 1,
+                hex_id,
                 population,
                 households,
                 climate: ClimateState {
                     pdsi: 0.0,
-                    drought_index_5y: rng.next_f32_range(0.0, 1.0),
-                    local_multiplier: rng.next_f32_range(0.85, 1.15),
-                    local_offset: rng.next_f32_range(-0.4, 0.4),
+                    drought_index_5y: hex.drought_index_5y,
+                    local_multiplier: hex.climate_local_multiplier,
+                    local_offset: hex.climate_local_offset,
                 },
                 water: WaterState {
-                    reliability: rng.next_f32_range(0.3, 1.0),
-                    quality: rng.next_f32_range(0.4, 1.0),
+                    reliability: hex.water_reliability,
+                    quality: hex.water_quality,
                 },
                 fuel: FuelState {
-                    high_wood: rng.next_f32_range(500.0, 3000.0),
-                    low_wood: rng.next_f32_range(500.0, 3000.0),
-                    alt_fuel: rng.next_f32_range(0.0, 500.0),
+                    stock: hex.fuel_stock,
                 },
                 food: FoodState {
-                    yield_kcal: rng.next_f32_range(2.0e7, 7.0e7)
-                        * cfg.resources.yield_multiplier.max(0.0),
-                    stores_kcal: rng.next_f32_range(1.0e7, 5.0e7)
-                        * cfg.resources.stores_multiplier.max(0.0),
+                    yield_kcal: hex.food_yield_kcal,
+                    stores_kcal: hex.food_stores_kcal,
                     deficit_kcal: 0.0,
                     ..FoodState::default()
                 },
@@ -348,7 +394,7 @@ pub fn build_synthetic_state(cfg: &MvpRunConfig) -> SimulationState {
                     tier3_maintenance_hours: households as f32 * 20.0,
                     tier4_trade_hours: 0.0,
                 },
-                defensibility: rng.next_f32_range(0.0, 1.0),
+                defensibility: hex.defensibility,
                 burden_multiplier: 1.0,
                 trait_household_counts,
                 ..SettlementState::default()
@@ -394,6 +440,30 @@ where
     let mut settlement_rows = Vec::new();
     let mut baseline_metric_rows = Vec::new();
     let mut metric_tracker = MetricTracker::new();
+
+    // Emit baseline at tick 0 so GUI/analysis series start from initial conditions.
+    trait_rows.extend(collect_trait_frequency_rows(&state));
+    if cfg.metrics.enable_baseline_metrics {
+        baseline_metric_rows.push(metric_tracker.snapshot(
+            &state,
+            cfg.metrics.aggregation_threshold,
+            cfg.metrics.network_min_weight,
+        ));
+    }
+    if cfg.validation_outputs.enable_trait_deposition {
+        deposition_rows.extend(crate::output::collect_trait_deposition_rows(&state));
+    }
+    if cfg.validation_outputs.enable_network_snapshot {
+        network_rows.extend(crate::output::collect_network_snapshot_rows(
+            &state,
+            cfg.validation_outputs.network_min_weight,
+        ));
+    }
+    settlement_rows.extend(crate::output::collect_settlement_snapshot_rows(&state));
+
+    if progress_every_ticks > 0 {
+        progress_cb(&state);
+    }
 
     for _ in 0..cfg.ticks {
         engine.run_one_tick(&mut state);
@@ -471,7 +541,12 @@ impl Lcg {
         self.next_u32() as f32 / u32::MAX as f32
     }
 
-    fn next_f32_range(&mut self, min: f32, max: f32) -> f32 {
-        min + (max - min) * self.next_f32()
+    fn next_f32_gaussian_clamped(&mut self, mean: f32, std_dev: f32, min: f32, max: f32) -> f32 {
+        // Box-Muller transform keeps initialization deterministic without adding
+        // external RNG dependencies.
+        let u1 = self.next_f32().max(1.0e-6);
+        let u2 = self.next_f32().max(1.0e-6);
+        let z0 = (-2.0 * u1.ln()).sqrt() * (2.0 * std::f32::consts::PI * u2).cos();
+        (mean + std_dev.max(0.0) * z0).clamp(min, max)
     }
 }

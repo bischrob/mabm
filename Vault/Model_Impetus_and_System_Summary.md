@@ -41,7 +41,7 @@ Hydrology is source-typed (ephemeral/stream/spring), with lagged climate respons
 
 ### 3) Fuel System
 
-Fuel is modeled as tiered pools (high-wood, low-wood, alternative fuels) with depletion/regeneration, substitution penalties, and hauling costs. Fuel scarcity competes for labor, constrains craft production (including ceramics), and contributes to migration pressure.
+Fuel is modeled as a single stock variable with depletion/regeneration and hauling costs. Fuel scarcity competes for labor, constrains craft production (including ceramics), and contributes to migration pressure.
 
 ### 4) Labor-Time Constraints
 

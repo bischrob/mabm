@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::versioning::RunVersion;
 
@@ -41,9 +41,7 @@ pub struct WaterState {
 
 #[derive(Clone, Debug, Default)]
 pub struct FuelState {
-    pub high_wood: f32,
-    pub low_wood: f32,
-    pub alt_fuel: f32,
+    pub stock: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -149,6 +147,9 @@ impl Default for DemographyPolicy {
 pub struct SpatialPolicy {
     pub hex_diameter_km: f32,
     pub flat_travel_km_per_day: f32,
+    pub population_capacity_per_hex: f32,
+    pub min_population_capacity_per_hex: f32,
+    pub stores_capacity_fraction: f32,
 }
 
 impl Default for SpatialPolicy {
@@ -156,6 +157,9 @@ impl Default for SpatialPolicy {
         Self {
             hex_diameter_km: 18.0,
             flat_travel_km_per_day: 18.0,
+            population_capacity_per_hex: 3_000.0,
+            min_population_capacity_per_hex: 25.0,
+            stores_capacity_fraction: 0.25,
         }
     }
 }
@@ -234,6 +238,20 @@ pub struct SettlementState {
 }
 
 #[derive(Clone, Debug, Default)]
+pub struct HexState {
+    pub id: HexId,
+    pub climate_local_multiplier: f32,
+    pub climate_local_offset: f32,
+    pub drought_index_5y: f32,
+    pub water_reliability: f32,
+    pub water_quality: f32,
+    pub fuel_stock: f32,
+    pub food_yield_kcal: f32,
+    pub food_stores_kcal: f32,
+    pub defensibility: f32,
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct TradeEdgeState {
     pub source_settlement_id: u32,
     pub target_settlement_id: u32,
@@ -246,6 +264,7 @@ pub struct TradeEdgeState {
 pub struct SimulationState {
     pub tick: u32,
     pub version: RunVersion,
+    pub hex_count: u32,
     pub climate_forcing_pdsi: Vec<f32>,
     pub storage_policy: StoragePolicy,
     pub threat_policy: ThreatPolicy,
@@ -255,7 +274,8 @@ pub struct SimulationState {
     pub mechanism_toggles: MechanismToggles,
     pub regional_threat_index: f32,
     pub simulation_seed: u64,
-    pub settlements: HashMap<SettlementId, SettlementState>,
+    pub hexes: BTreeMap<HexId, HexState>,
+    pub settlements: BTreeMap<SettlementId, SettlementState>,
     pub trade_edges: Vec<TradeEdgeState>,
 }
 
@@ -264,6 +284,7 @@ impl Default for SimulationState {
         Self {
             tick: 0,
             version: RunVersion::new(),
+            hex_count: 0,
             climate_forcing_pdsi: Vec::new(),
             storage_policy: StoragePolicy::default(),
             threat_policy: ThreatPolicy::default(),
@@ -273,7 +294,8 @@ impl Default for SimulationState {
             mechanism_toggles: MechanismToggles::default(),
             regional_threat_index: 0.0,
             simulation_seed: 0,
-            settlements: HashMap::new(),
+            hexes: BTreeMap::new(),
+            settlements: BTreeMap::new(),
             trade_edges: Vec::new(),
         }
     }

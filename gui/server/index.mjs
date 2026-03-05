@@ -86,15 +86,31 @@ app.get("/api/runs/:runId/visuals", async (req, res) => {
         tick: Number(r.tick ?? 0),
         year: Number(r.year ?? 0),
         settlement_id: Number(r.settlement_id ?? 0),
+        hex_id: Number(r.hex_id ?? 0),
         grid_q: Number(r.grid_q ?? 0),
         grid_r: Number(r.grid_r ?? 0),
         population_total: Number(r.population_total ?? 0),
+        households: Number(r.households ?? 0),
+        climate_pdsi: Number(r.climate_pdsi ?? 0),
+        drought_index_5y: Number(r.drought_index_5y ?? 0),
+        water_reliability: Number(r.water_reliability ?? 0),
+        water_quality: Number(r.water_quality ?? 0),
+        fuel_stock: Number(r.fuel_stock ?? 0),
+        food_yield_kcal: Number(r.food_yield_kcal ?? 0),
+        food_stores_kcal: Number(r.food_stores_kcal ?? 0),
+        food_deficit_kcal: Number(r.food_deficit_kcal ?? 0),
+        food_capacity_persons: Number(r.food_capacity_persons ?? 0),
+        stress_composite: Number(r.stress_composite ?? 0),
+        defensibility: Number(r.defensibility ?? 0),
+        burden_multiplier: Number(r.burden_multiplier ?? 0),
+        disease_infected_share: Number(r.disease_infected_share ?? 0),
         is_active: String(r.is_active).toLowerCase() === "true",
         status: String(r.status ?? "")
       }));
 
     res.json({
       run_id: manifest.run_id,
+      hex_count: Number(manifest.summary?.hex_count ?? manifest.summary?.settlement_count ?? 0),
       latest_tick: latestTick,
       population_series: populationSeries,
       settlements_latest: latestSettlements
@@ -108,15 +124,19 @@ app.post("/api/run", async (req, res) => {
   const configPath = req.body?.configPath ?? "configs/sweep_long_transition.toml";
   const ticksOverride = Number(req.body?.ticksOverride ?? 0);
   const liveUpdateEveryTicks = Number(req.body?.liveUpdateEveryTicks ?? 0);
+  const seedOverride = Number(req.body?.seedOverride ?? 0);
   let runConfigPath = configPath;
   let tempConfigPath = null;
-  if (ticksOverride > 0 || liveUpdateEveryTicks > 0) {
+  if (ticksOverride > 0 || liveUpdateEveryTicks > 0 || seedOverride > 0) {
     try {
       const srcPath = path.isAbsolute(configPath) ? configPath : path.join(repoRoot, configPath);
       const raw = await fs.readFile(srcPath, "utf-8");
       let patched = raw;
       if (ticksOverride > 0) {
         patched = patched.replace(/^ticks\s*=\s*\d+/m, `ticks = ${Math.floor(ticksOverride)}`);
+      }
+      if (seedOverride > 0) {
+        patched = patched.replace(/^seed\s*=\s*\d+/m, `seed = ${Math.floor(seedOverride)}`);
       }
       if (/^\[mvp\.gui\]/m.test(patched)) {
         patched = patched.replace(

@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    model::{Season, SettlementState, SimulationState, MVP_TRAIT_COUNT},
+    model::{HexState, Season, SettlementState, SimulationState, MVP_TRAIT_COUNT},
     utils::{
         clamp01, fuel_stress, infected_share, labor_crowding, normalized_deficit,
         roughness_adjusted_hex_crossing_days,
@@ -146,9 +146,7 @@ impl TickEngine {
         for settlement in state.settlements.values_mut() {
             settlement.water.reliability = clamp01(settlement.water.reliability);
             settlement.water.quality = clamp01(settlement.water.quality);
-            settlement.fuel.high_wood = settlement.fuel.high_wood.max(0.0);
-            settlement.fuel.low_wood = settlement.fuel.low_wood.max(0.0);
-            settlement.fuel.alt_fuel = settlement.fuel.alt_fuel.max(0.0);
+            settlement.fuel.stock = settlement.fuel.stock.max(0.0);
         }
     }
 
@@ -270,7 +268,7 @@ impl TickEngine {
 
         // Migration and fission are modeled as deterministic reallocation flows
         // so regional settlement structure can respond to stress gradients.
-        let snapshot: Vec<_> = state
+        let mut snapshot: Vec<_> = state
             .settlements
             .values()
             .map(|s| {
@@ -285,8 +283,19 @@ impl TickEngine {
                 )
             })
             .collect();
+        snapshot.sort_by_key(|t| t.0);
 
         let mut pop_delta: HashMap<u32, i32> = HashMap::new();
+        let mut occupied_hexes: HashSet<u32> = snapshot.iter().map(|t| t.1.max(1)).collect();
+        let mut new_settlements = Vec::new();
+        let mut next_settlement_id = state
+            .settlements
+            .keys()
+            .next_back()
+            .copied()
+            .unwrap_or(0)
+            .saturating_add(1);
+
         for (sid, source_hex_id, pop, stress, _water, _burden, _defensibility) in &snapshot {
             if *pop == 0 {
                 continue;
@@ -331,10 +340,26 @@ impl TickEngine {
             ) {
                 *pop_delta.entry(*sid).or_insert(0) -= out as i32;
                 *pop_delta.entry(dest_id).or_insert(0) += out as i32;
+            } else if let Some(dest_hex_id) =
+                select_empty_hex_destination(*source_hex_id, *stress, &occupied_hexes, state)
+            {
+                if let Some(source) = state.settlements.get(sid) {
+                    let founder = build_settlement_from_fission(
+                        source,
+                        next_settlement_id,
+                        dest_hex_id,
+                        out,
+                        state,
+                    );
+                    next_settlement_id = next_settlement_id.saturating_add(1);
+                    occupied_hexes.insert(dest_hex_id);
+                    *pop_delta.entry(*sid).or_insert(0) -= out as i32;
+                    new_settlements.push(founder);
+                }
             }
         }
 
-        if pop_delta.is_empty() {
+        if pop_delta.is_empty() && new_settlements.is_empty() {
             return;
         }
 
@@ -344,6 +369,10 @@ impl TickEngine {
                 s.population = new_pop;
                 refresh_households_and_labor(s);
             }
+        }
+
+        for settlement in new_settlements {
+            state.settlements.insert(settlement.id, settlement);
         }
     }
 
@@ -410,7 +439,7 @@ impl TickEngine {
     }
 
     fn update_trade_network(&self, state: &mut SimulationState, _season: Season) {
-        let snapshot: Vec<_> = state
+        let mut snapshot: Vec<_> = state
             .settlements
             .values()
             .map(|s| {
@@ -428,6 +457,7 @@ impl TickEngine {
                 )
             })
             .collect();
+        snapshot.sort_by_key(|t| t.0);
 
         let mut prev_weights = HashMap::new();
         for e in &state.trade_edges {
@@ -524,6 +554,10 @@ impl TickEngine {
     }
 
     fn update_demography(&self, state: &mut SimulationState, season: Season) {
+        let capacity_max = state.spatial_policy.population_capacity_per_hex.max(1.0);
+        let capacity_min = state.spatial_policy.min_population_capacity_per_hex.max(1.0);
+        let stores_capacity_fraction = state.spatial_policy.stores_capacity_fraction.clamp(0.0, 1.0);
+
         for settlement in state.settlements.values_mut() {
             if settlement.population == 0 {
                 settlement.households = 0;
@@ -570,22 +604,34 @@ impl TickEngine {
             let stress = clamp01(settlement.stress_composite);
             let disease_pressure = clamp01(infected_share(settlement));
             let burden_pressure = clamp01((settlement.burden_multiplier - 1.0) / 2.0);
+            let carrying_capacity = estimate_population_capacity(
+                settlement,
+                capacity_min,
+                capacity_max,
+                stores_capacity_fraction,
+            );
+            let carrying_ratio = settlement.population as f32 / carrying_capacity.max(1.0);
+            let crowding_pressure = (carrying_ratio - 1.0).clamp(0.0, 2.0);
             let emergency_pressure = if settlement.food.emergency_reciprocity_last_tick {
-                0.015
+                0.005
             } else {
                 0.0
             };
 
-            let birth_suppression =
-                (0.25 * stress + 0.10 * disease_pressure + 0.08 * burden_pressure).clamp(0.0, 0.75);
+            let birth_suppression = (0.12 * stress
+                + 0.04 * disease_pressure
+                + 0.03 * burden_pressure
+                + 0.25 * crowding_pressure)
+                .clamp(0.0, 0.70);
             let births = (popf * birth_rate_season * (1.0 - birth_suppression))
                 .round()
                 .max(0.0) as u32;
 
             let death_rate = death_base_season
-                + 0.018 * stress
-                + 0.012 * disease_pressure
-                + 0.008 * burden_pressure
+                + 0.008 * stress
+                + 0.006 * disease_pressure
+                + 0.004 * burden_pressure
+                + 0.020 * crowding_pressure
                 + emergency_pressure;
             let deaths = (popf * death_rate.clamp(0.0, 0.35)).round().max(0.0) as u32;
 
@@ -694,7 +740,10 @@ fn select_migration_destination(
             continue;
         }
 
-        let hex_hops = source_hex_id.abs_diff(*target_hex_id).max(1) as f32;
+        let hex_hops = source_hex_id
+            .max(1)
+            .abs_diff((*target_hex_id).max(1))
+            .max(1) as f32;
         let route_distance_km = hex_hops * hex_diameter_km.max(0.01);
         let travel_days = roughness_adjusted_hex_crossing_days(
             route_distance_km,
@@ -716,6 +765,132 @@ fn select_migration_destination(
     best.map(|(id, _)| id)
 }
 
+fn select_empty_hex_destination(
+    source_hex_id: u32,
+    source_stress: f32,
+    occupied_hexes: &HashSet<u32>,
+    state: &SimulationState,
+) -> Option<u32> {
+    if source_stress < 0.50 || state.hexes.is_empty() {
+        return None;
+    }
+
+    let mut best: Option<(u32, f32)> = None;
+    for hex in state.hexes.values() {
+        if occupied_hexes.contains(&hex.id) {
+            continue;
+        }
+
+        let hops = source_hex_id.max(1).abs_diff(hex.id.max(1)).max(1) as f32;
+        let route_distance_km = hops * state.spatial_policy.hex_diameter_km.max(0.01);
+        let travel_days = roughness_adjusted_hex_crossing_days(
+            route_distance_km,
+            state.spatial_policy.flat_travel_km_per_day,
+            hex.defensibility,
+        );
+        let travel_penalty = (travel_days / 1.0).clamp(0.0, 1.0);
+
+        let food_norm = (hex.food_yield_kcal / 6.0e7).clamp(0.0, 1.0);
+        let water_norm = hex.water_reliability.clamp(0.0, 1.0);
+        let drought_relief = (1.0 - hex.drought_index_5y).clamp(0.0, 1.0);
+        let score = (0.45 * food_norm + 0.35 * water_norm + 0.20 * drought_relief
+            - 0.30 * travel_penalty)
+            .clamp(0.0, 1.0);
+
+        match best {
+            Some((_, best_score)) if score <= best_score => {}
+            _ => best = Some((hex.id, score)),
+        }
+    }
+
+    best.map(|(hid, _)| hid)
+}
+
+fn build_settlement_from_fission(
+    source: &SettlementState,
+    new_id: u32,
+    dest_hex_id: u32,
+    migrant_pop: u32,
+    state: &SimulationState,
+) -> SettlementState {
+    let migrants = migrant_pop.max(5);
+    let households = (migrants / 5).max(1);
+    let source_pop = source.population.max(1) as f32;
+    let migrant_fraction = (migrants as f32 / source_pop).clamp(0.0, 1.0);
+
+    let hex = state.hexes.get(&dest_hex_id).cloned().unwrap_or(HexState {
+        id: dest_hex_id,
+        climate_local_multiplier: source.climate.local_multiplier,
+        climate_local_offset: source.climate.local_offset,
+        drought_index_5y: source.climate.drought_index_5y,
+        water_reliability: source.water.reliability,
+        water_quality: source.water.quality,
+        fuel_stock: source.fuel.stock,
+        food_yield_kcal: source.food.yield_kcal,
+        food_stores_kcal: source.food.stores_kcal,
+        defensibility: source.defensibility,
+    });
+
+    let mut trait_household_counts = [0_u32; MVP_TRAIT_COUNT];
+    for (idx, c) in source.trait_household_counts.iter().enumerate() {
+        let moved = (*c as f32 * migrant_fraction).round() as u32;
+        trait_household_counts[idx] = moved.min(households);
+    }
+
+    let mut disease = source.disease.clone();
+    disease.exposed = (disease.exposed as f32 * migrant_fraction).round() as u32;
+    disease.infected = (disease.infected as f32 * migrant_fraction * 0.5).round() as u32;
+    disease.recovered = (disease.recovered as f32 * migrant_fraction).round() as u32;
+    let occupied = disease.exposed + disease.infected + disease.recovered;
+    disease.susceptible = migrants.saturating_sub(occupied);
+
+    let mut settlement = SettlementState {
+        id: new_id,
+        hex_id: dest_hex_id,
+        population: migrants,
+        households,
+        climate: crate::model::ClimateState {
+            pdsi: source.climate.pdsi,
+            drought_index_5y: hex.drought_index_5y,
+            local_multiplier: hex.climate_local_multiplier,
+            local_offset: hex.climate_local_offset,
+        },
+        water: crate::model::WaterState {
+            reliability: hex.water_reliability,
+            quality: hex.water_quality,
+        },
+        fuel: crate::model::FuelState {
+            stock: hex.fuel_stock,
+        },
+        food: crate::model::FoodState {
+            yield_kcal: hex.food_yield_kcal,
+            stores_kcal: (hex.food_stores_kcal * 0.10
+                + source.food.stores_kcal * migrant_fraction * 0.15)
+                .max(0.0),
+            deficit_kcal: 0.0,
+            seed_reserve_kcal: 0.0,
+            seed_drawn_last_tick: false,
+            emergency_reciprocity_last_tick: false,
+            next_yield_multiplier: 1.0,
+        },
+        disease,
+        labor: crate::model::LaborState {
+            seasonal_budget_hours: households as f32 * 180.0,
+            tier1_survival_hours: households as f32 * 45.0,
+            tier2_subsistence_hours: households as f32 * 70.0,
+            tier3_maintenance_hours: households as f32 * 20.0,
+            tier4_trade_hours: 0.0,
+        },
+        defensibility: hex.defensibility,
+        burden_multiplier: 1.0,
+        trait_household_counts,
+        ..SettlementState::default()
+    };
+
+    refresh_households_and_labor(&mut settlement);
+    settlement
+}
+
 fn travel_time_labor_multiplier(
     settlement: &SettlementState,
     hex_diameter_km: f32,
@@ -728,6 +903,20 @@ fn travel_time_labor_multiplier(
     );
     // Legacy baseline used 1 day per flat crossing.
     (crossing_days / 1.0).clamp(0.25, 2.5)
+}
+
+fn estimate_population_capacity(
+    settlement: &SettlementState,
+    capacity_min: f32,
+    capacity_max: f32,
+    stores_capacity_fraction: f32,
+) -> f32 {
+    let seasonal_need_per_person = 2500.0 * 90.0 * settlement.burden_multiplier.max(0.5);
+    let effective_kcal = settlement.food.yield_kcal.max(0.0)
+        + stores_capacity_fraction * settlement.food.stores_kcal.max(0.0);
+    let resource_capacity = (effective_kcal / seasonal_need_per_person.max(1.0)).max(0.0);
+
+    resource_capacity.clamp(capacity_min, capacity_max.max(capacity_min))
 }
 
 fn rebalance_disease_compartments(settlement: &mut SettlementState) {
