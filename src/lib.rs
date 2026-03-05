@@ -5,6 +5,7 @@
 pub mod climate;
 pub mod config;
 pub mod engine;
+pub mod manifest;
 pub mod metrics;
 pub mod model;
 pub mod mvp;
@@ -15,6 +16,10 @@ pub mod versioning;
 
 pub use config::{load_config_with_hash, validate_config, AppConfig, ConfigError};
 pub use engine::{CouplingConfig, TickEngine};
+pub use manifest::{
+    relative_or_absolute_string, upsert_run_index, write_run_manifest, RunIndexEntry, RunManifest,
+    RunManifestFiles, RunManifestSummary,
+};
 pub use metrics::{write_baseline_metrics_csv, BaselineMetricRow, MetricTracker};
 pub use model::{
     ClimateState, ConflictState, DiseaseState, FoodState, FuelState, LaborState, Season,

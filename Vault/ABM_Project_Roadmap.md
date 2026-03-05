@@ -94,6 +94,10 @@ Goal:
    - calibrated targets/scales applied to `configs/sweep.toml`
    - post-calibration sweep rerun and archived in Vault
    - baseline fit regime recorded for future regression comparisons
+22. `[x]` GUI integration foundation implemented:
+   - Vite frontend scaffold for run management and manifest viewing
+   - thin API wrapper that executes Rust CLI runs
+   - run manifest/index contract for GUI discovery (`outputs/run_index.json`)
 
 ## In Progress (Current MVP Build)
 
