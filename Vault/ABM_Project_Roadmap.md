@@ -54,6 +54,10 @@ Goal:
    - neutral drift + conformist + prestige pull at settlement level
    - deterministic jitter and bounded per-tick trait-step control
    - trait counts clamped to household bounds
+12. `[x]` Optional validation outputs implemented:
+   - deposited trait accumulator snapshots
+   - network interaction snapshot ledger
+   - config-gated emission for validation runs only
 
 ## In Progress (Current MVP Build)
 
@@ -67,18 +71,15 @@ Goal:
 
 ## Next (Highest Priority)
 
-1. `[ ]` Add optional validation outputs:
-   - deposited trait accumulator table
-   - network edge snapshot ledger
-
-## Next After That
-
 1. `[ ]` Build experiment runner for sweeps:
    - batch runs
    - seed policies
    - summary metric outputs
-2. `[ ]` Add mechanism toggle system for knockout experiments.
-3. `[ ]` Add baseline metric pack:
+
+## Next After That
+
+1. `[ ]` Add mechanism toggle system for knockout experiments.
+2. `[ ]` Add baseline metric pack:
    - population trend
    - aggregation/abandonment counts
    - network structure metrics

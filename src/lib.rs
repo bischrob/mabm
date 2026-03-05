@@ -19,7 +19,9 @@ pub use model::{
 };
 pub use mvp::{build_synthetic_state, run_mvp_simulation, MvpRunConfig, MvpRunResult};
 pub use output::{
-    collect_trait_frequency_rows, write_trait_frequency_csv, SettlementTraitFrequencyRow,
+    collect_network_snapshot_rows, collect_trait_deposition_rows, collect_trait_frequency_rows,
+    write_network_snapshot_csv, write_trait_deposition_csv, write_trait_frequency_csv,
+    NetworkInteractionSnapshotRow, SettlementTraitDepositionRow, SettlementTraitFrequencyRow,
 };
 pub use versioning::RunVersion;
 
@@ -244,5 +246,22 @@ mod tests {
                 assert!(c <= s.households);
             }
         }
+    }
+
+    #[test]
+    fn optional_validation_outputs_can_be_emitted() {
+        let mut cfg = crate::MvpRunConfig {
+            ticks: 8,
+            snapshot_every_ticks: 4,
+            settlement_count: 5,
+            base_population: 90,
+            seed: 19,
+            ..crate::MvpRunConfig::default()
+        };
+        cfg.validation_outputs.enable_trait_deposition = true;
+        cfg.validation_outputs.enable_network_snapshot = true;
+        let result = crate::run_mvp_simulation(&cfg, CouplingConfig::default(), None);
+        assert!(!result.deposition_rows.is_empty());
+        assert!(!result.network_rows.is_empty());
     }
 }

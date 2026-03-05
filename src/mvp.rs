@@ -27,6 +27,8 @@ pub struct MvpRunConfig {
     pub threat: ThreatConfig,
     #[serde(default)]
     pub culture: CultureConfig,
+    #[serde(default)]
+    pub validation_outputs: ValidationOutputConfig,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -60,6 +62,7 @@ impl Default for MvpRunConfig {
             storage: StorageConfig::default(),
             threat: ThreatConfig::default(),
             culture: CultureConfig::default(),
+            validation_outputs: ValidationOutputConfig::default(),
         }
     }
 }
@@ -104,10 +107,31 @@ impl Default for CultureConfig {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ValidationOutputConfig {
+    pub enable_trait_deposition: bool,
+    pub enable_network_snapshot: bool,
+    pub deposition_rate_per_tick: f32,
+    pub network_min_weight: f32,
+}
+
+impl Default for ValidationOutputConfig {
+    fn default() -> Self {
+        Self {
+            enable_trait_deposition: false,
+            enable_network_snapshot: false,
+            deposition_rate_per_tick: 0.01,
+            network_min_weight: 0.20,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct MvpRunResult {
     pub final_state: SimulationState,
     pub trait_rows: Vec<SettlementTraitFrequencyRow>,
+    pub deposition_rows: Vec<crate::output::SettlementTraitDepositionRow>,
+    pub network_rows: Vec<crate::output::NetworkInteractionSnapshotRow>,
 }
 
 pub fn build_synthetic_state(cfg: &MvpRunConfig) -> SimulationState {
@@ -201,17 +225,48 @@ pub fn run_mvp_simulation(
     }
     let engine = TickEngine::new(coupling);
     let mut trait_rows = Vec::new();
+    let mut deposition_rows = Vec::new();
+    let mut network_rows = Vec::new();
 
     for _ in 0..cfg.ticks {
         engine.run_one_tick(&mut state);
+        if cfg.validation_outputs.enable_trait_deposition {
+            accumulate_trait_deposition(&mut state, cfg.validation_outputs.deposition_rate_per_tick);
+        }
         if state.tick % cfg.snapshot_every_ticks == 0 {
             trait_rows.extend(collect_trait_frequency_rows(&state));
+            if cfg.validation_outputs.enable_trait_deposition {
+                deposition_rows.extend(crate::output::collect_trait_deposition_rows(&state));
+            }
+            if cfg.validation_outputs.enable_network_snapshot {
+                network_rows.extend(crate::output::collect_network_snapshot_rows(
+                    &state,
+                    cfg.validation_outputs.network_min_weight,
+                ));
+            }
         }
     }
 
     MvpRunResult {
         final_state: state,
         trait_rows,
+        deposition_rows,
+        network_rows,
+    }
+}
+
+fn accumulate_trait_deposition(state: &mut SimulationState, deposition_rate_per_tick: f32) {
+    let rate = deposition_rate_per_tick.clamp(0.0, 1.0);
+    for s in state.settlements.values_mut() {
+        for i in 0..MVP_TRAIT_COUNT {
+            let active = s.trait_household_counts[i] as f32;
+            let delta = if active > 0.0 && rate > 0.0 {
+                (active * rate).ceil().max(1.0) as u64
+            } else {
+                0
+            };
+            s.deposited_trait_counts[i] = s.deposited_trait_counts[i].saturating_add(delta);
+        }
     }
 }
 

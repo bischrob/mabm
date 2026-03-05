@@ -139,6 +139,16 @@ pub fn validate_config(cfg: &AppConfig) -> Result<(), ConfigError> {
             "mvp.culture.max_trait_step_per_tick must be within [0.0, 1.0]".to_string(),
         ));
     }
+    if !(0.0..=1.0).contains(&cfg.mvp.validation_outputs.deposition_rate_per_tick) {
+        return Err(ConfigError::Validation(
+            "mvp.validation_outputs.deposition_rate_per_tick must be within [0.0, 1.0]".to_string(),
+        ));
+    }
+    if !(0.0..=1.0).contains(&cfg.mvp.validation_outputs.network_min_weight) {
+        return Err(ConfigError::Validation(
+            "mvp.validation_outputs.network_min_weight must be within [0.0, 1.0]".to_string(),
+        ));
+    }
     Ok(())
 }
 

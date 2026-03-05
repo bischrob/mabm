@@ -1,10 +1,10 @@
-scenario_id = "synthetic-baseline"
+scenario_id = "synthetic-validation"
 
 [mvp]
-ticks = 40
+ticks = 16
 snapshot_every_ticks = 4
-settlement_count = 25
-base_population = 120
+settlement_count = 10
+base_population = 100
 seed = 42
 
 [mvp.climate]
@@ -41,8 +41,8 @@ jitter_scale = 0.01
 max_trait_step_per_tick = 0.15
 
 [mvp.validation_outputs]
-enable_trait_deposition = false
-enable_network_snapshot = false
+enable_trait_deposition = true
+enable_network_snapshot = true
 deposition_rate_per_tick = 0.01
 network_min_weight = 0.20
 

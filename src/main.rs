@@ -26,4 +26,32 @@ fn main() {
         result.trait_rows.len(),
         out_path.display()
     );
+
+    if cfg.mvp.validation_outputs.enable_trait_deposition {
+        let dep_path = out_dir.join(format!(
+            "{}_{}_trait_deposition.csv",
+            cfg.scenario_id, result.final_state.version.run_id
+        ));
+        mabm::write_trait_deposition_csv(&dep_path, &result.deposition_rows)
+            .expect("write deposition CSV");
+        println!(
+            "validation output: deposition_rows={} file={}",
+            result.deposition_rows.len(),
+            dep_path.display()
+        );
+    }
+
+    if cfg.mvp.validation_outputs.enable_network_snapshot {
+        let net_path = out_dir.join(format!(
+            "{}_{}_network_snapshot.csv",
+            cfg.scenario_id, result.final_state.version.run_id
+        ));
+        mabm::write_network_snapshot_csv(&net_path, &result.network_rows)
+            .expect("write network CSV");
+        println!(
+            "validation output: network_rows={} file={}",
+            result.network_rows.len(),
+            net_path.display()
+        );
+    }
 }

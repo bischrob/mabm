@@ -181,6 +181,7 @@ pub struct SettlementState {
     pub defensibility: f32,
     pub burden_multiplier: f32,
     pub trait_household_counts: [u32; MVP_TRAIT_COUNT],
+    pub deposited_trait_counts: [u64; MVP_TRAIT_COUNT],
 }
 
 #[derive(Clone, Debug)]
