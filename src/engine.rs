@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -257,6 +259,75 @@ impl TickEngine {
 
             settlement.stress_composite = self.compute_composite_stress(settlement);
         }
+
+        // Migration and fission are modeled as deterministic reallocation flows
+        // so regional settlement structure can respond to stress gradients.
+        let snapshot: Vec<_> = state
+            .settlements
+            .values()
+            .map(|s| {
+                (
+                    s.id,
+                    s.population,
+                    s.stress_composite,
+                    s.water.reliability,
+                    s.burden_multiplier,
+                )
+            })
+            .collect();
+
+        let mut pop_delta: HashMap<u32, i32> = HashMap::new();
+        for (sid, pop, stress, _water, _burden) in &snapshot {
+            if *pop == 0 {
+                continue;
+            }
+
+            let mut outflow = 0_u32;
+
+            // Strong stress pushes households to relocate toward safer neighbors.
+            if *stress > 0.55 && *pop > 25 {
+                let frac = ((*stress - 0.55) * 0.20).clamp(0.0, 0.10);
+                outflow = ((*pop as f32) * frac).round() as u32;
+            }
+
+            // Aggregation under stress can trigger fission into lower-pressure sites.
+            if *stress > 0.45 && *pop > 260 {
+                outflow = outflow.saturating_add(((*pop as f32) * 0.04).round() as u32);
+            }
+
+            // Catastrophic abandonment when tiny settlements stay highly stressed.
+            if *stress > 0.90 && *pop < 40 {
+                outflow = *pop;
+            }
+
+            if outflow == 0 {
+                continue;
+            }
+
+            let retain_floor = if outflow >= *pop { 0 } else { 5 };
+            let max_out = pop.saturating_sub(retain_floor);
+            let out = outflow.min(max_out);
+            if out == 0 {
+                continue;
+            }
+
+            if let Some(dest_id) = select_migration_destination(*sid, *stress, &snapshot) {
+                *pop_delta.entry(*sid).or_insert(0) -= out as i32;
+                *pop_delta.entry(dest_id).or_insert(0) += out as i32;
+            }
+        }
+
+        if pop_delta.is_empty() {
+            return;
+        }
+
+        for (sid, delta) in pop_delta {
+            if let Some(s) = state.settlements.get_mut(&sid) {
+                let new_pop = (s.population as i64 + delta as i64).max(0) as u32;
+                s.population = new_pop;
+                refresh_households_and_labor(s);
+            }
+        }
     }
 
     fn update_cultural_transmission(&self, state: &mut SimulationState, _season: Season) {
@@ -327,9 +398,26 @@ impl TickEngine {
 
     fn update_demography(&self, state: &mut SimulationState, season: Season) {
         for settlement in state.settlements.values_mut() {
+            if settlement.population == 0 {
+                settlement.households = 0;
+                settlement.labor.seasonal_budget_hours = 0.0;
+                settlement.labor.tier1_survival_hours = 0.0;
+                settlement.labor.tier2_subsistence_hours = 0.0;
+                settlement.labor.tier3_maintenance_hours = 0.0;
+                settlement.labor.tier4_trade_hours = 0.0;
+                settlement.disease.susceptible = 0;
+                settlement.disease.exposed = 0;
+                settlement.disease.infected = 0;
+                settlement.disease.recovered = 0;
+                for c in &mut settlement.trait_household_counts {
+                    *c = 0;
+                }
+                continue;
+            }
+
             // Demography closes the annual feedback loop: subsistence stress and
             // disease pressure must alter population trajectories each season.
-            let pop0 = settlement.population.max(1);
+            let pop0 = settlement.population;
             let popf = pop0 as f32;
 
             let base_birth_rate_annual = 0.033_f32;
@@ -374,15 +462,11 @@ impl TickEngine {
                 + emergency_pressure;
             let deaths = (popf * death_rate.clamp(0.0, 0.35)).round().max(0.0) as u32;
 
-            let pop1 = pop0.saturating_add(births).saturating_sub(deaths).max(1);
+            let pop1 = pop0.saturating_add(births).saturating_sub(deaths);
             settlement.population = pop1;
 
             // Maintain household-scale labor and trait denominators as population moves.
-            settlement.households = (settlement.population / 5).max(1);
-            settlement.labor.seasonal_budget_hours = settlement.households as f32 * 180.0;
-            settlement.labor.tier1_survival_hours = settlement.households as f32 * 45.0;
-            settlement.labor.tier2_subsistence_hours = settlement.households as f32 * 70.0;
-            settlement.labor.tier3_maintenance_hours = settlement.households as f32 * 20.0;
+            refresh_households_and_labor(settlement);
 
             for c in &mut settlement.trait_household_counts {
                 *c = (*c).min(settlement.households);
@@ -424,6 +508,49 @@ fn deterministic_signed_noise(seed: u64, tick: u32, settlement_id: u32, trait_id
     x ^= x >> 33;
     let u = (x as f64 / u64::MAX as f64) as f32;
     (u * 2.0) - 1.0
+}
+
+fn refresh_households_and_labor(settlement: &mut SettlementState) {
+    settlement.households = if settlement.population == 0 {
+        0
+    } else {
+        (settlement.population / 5).max(1)
+    };
+    settlement.labor.seasonal_budget_hours = settlement.households as f32 * 180.0;
+    settlement.labor.tier1_survival_hours = settlement.households as f32 * 45.0;
+    settlement.labor.tier2_subsistence_hours = settlement.households as f32 * 70.0;
+    settlement.labor.tier3_maintenance_hours = settlement.households as f32 * 20.0;
+    settlement.labor.tier4_trade_hours = 0.0;
+}
+
+fn select_migration_destination(
+    source_id: u32,
+    source_stress: f32,
+    snapshot: &[(u32, u32, f32, f32, f32)],
+) -> Option<u32> {
+    let mut best: Option<(u32, f32)> = None;
+    for (id, pop, stress, water_rel, burden) in snapshot {
+        if *id == source_id {
+            continue;
+        }
+        if *pop > 900 {
+            continue;
+        }
+        if *stress >= source_stress {
+            continue;
+        }
+
+        let suitability =
+            (0.60 * (1.0 - *stress) + 0.30 * *water_rel + 0.10 * (2.0 - *burden)).clamp(0.0, 1.2);
+        if let Some((_, best_score)) = best {
+            if suitability > best_score {
+                best = Some((*id, suitability));
+            }
+        } else {
+            best = Some((*id, suitability));
+        }
+    }
+    best.map(|(id, _)| id)
 }
 
 fn rebalance_disease_compartments(settlement: &mut SettlementState) {

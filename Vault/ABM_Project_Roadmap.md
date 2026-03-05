@@ -78,6 +78,10 @@ Goal:
    - stress-coupled births/deaths per seasonal tick
    - household/labor rebalance after population updates
    - disease compartment rebalance to remain population-consistent
+18. `[x]` Migration/fission/abandonment subsystem implemented:
+   - deterministic push-pull relocation under stress gradients
+   - catastrophic abandonment trigger for small high-stress settlements
+   - destination pull by stress/water/burden suitability
 
 ## In Progress (Current MVP Build)
 
@@ -106,7 +110,7 @@ MVP is done when all are true:
 2. `[~]` Core mechanisms run without placeholder math for:
    - food/storage `[x]`
    - water/fuel/labor stress `[x]`
-   - migration/fission pressure `[ ]`
+   - migration/fission pressure `[x]`
    - cultural trait dynamics `[x]`
    - demography births/deaths `[x]`
 3. `[ ]` Trait-frequency CSV output is stable and analysis-ready.
@@ -123,4 +127,5 @@ MVP is done when all are true:
 ## Working Rule
 
 - Default to synthetic-data-first, reproducible runs until MVP acceptance gate is met, then expand to GIS and empirical calibration.
+
 

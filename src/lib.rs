@@ -478,4 +478,112 @@ mod tests {
             s.disease.susceptible + s.disease.exposed + s.disease.infected + s.disease.recovered;
         assert_eq!(disease_total, s.population);
     }
+
+    #[test]
+    fn migration_reallocates_population_toward_lower_stress_settlement() {
+        let mut sim = SimulationState::default();
+        sim.climate_forcing_pdsi = vec![0.0];
+        sim.settlements.insert(
+            1,
+            SettlementState {
+                id: 1,
+                population: 350,
+                households: 70,
+                climate: ClimateState {
+                    pdsi: -6.0,
+                    drought_index_5y: 1.0,
+                    local_multiplier: 1.0,
+                    local_offset: 0.0,
+                },
+                water: WaterState {
+                    reliability: 0.2,
+                    quality: 0.2,
+                },
+                fuel: FuelState {
+                    high_wood: 0.0,
+                    low_wood: 1.0,
+                    alt_fuel: 0.0,
+                },
+                food: FoodState {
+                    yield_kcal: 1_000.0,
+                    stores_kcal: 0.0,
+                    deficit_kcal: 0.0,
+                    ..FoodState::default()
+                },
+                disease: DiseaseState {
+                    susceptible: 50,
+                    exposed: 50,
+                    infected: 230,
+                    recovered: 20,
+                    beta_water_multiplier: 1.0,
+                },
+                defensibility: 1.0,
+                ..SettlementState::default()
+            },
+        );
+        sim.settlements.insert(
+            2,
+            SettlementState {
+                id: 2,
+                population: 120,
+                households: 24,
+                climate: ClimateState {
+                    pdsi: 0.0,
+                    drought_index_5y: 0.0,
+                    local_multiplier: 1.0,
+                    local_offset: 0.0,
+                },
+                water: WaterState {
+                    reliability: 1.0,
+                    quality: 1.0,
+                },
+                fuel: FuelState {
+                    high_wood: 1000.0,
+                    low_wood: 0.0,
+                    alt_fuel: 0.0,
+                },
+                food: FoodState {
+                    yield_kcal: 80_000_000.0,
+                    stores_kcal: 20_000_000.0,
+                    deficit_kcal: 0.0,
+                    ..FoodState::default()
+                },
+                disease: DiseaseState {
+                    susceptible: 118,
+                    exposed: 1,
+                    infected: 1,
+                    recovered: 0,
+                    beta_water_multiplier: 1.0,
+                },
+                ..SettlementState::default()
+            },
+        );
+
+        let before_a = sim
+            .settlements
+            .get(&1)
+            .expect("settlement 1 exists")
+            .population;
+        let before_b = sim
+            .settlements
+            .get(&2)
+            .expect("settlement 2 exists")
+            .population;
+
+        let engine = TickEngine::new(CouplingConfig::default());
+        engine.run_one_tick(&mut sim);
+
+        let after_a = sim
+            .settlements
+            .get(&1)
+            .expect("settlement 1 exists")
+            .population;
+        let after_b = sim
+            .settlements
+            .get(&2)
+            .expect("settlement 2 exists")
+            .population;
+        assert!(after_a < before_a);
+        assert!(after_b > before_b);
+    }
 }
