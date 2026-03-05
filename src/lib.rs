@@ -726,10 +726,12 @@ mod tests {
                 fit_error_aggregation: 0.0,
                 fit_error_network_density: 0.0,
                 fit_error_stress: 0.0,
+                observed_start_population_total: 100.0,
                 observed_population_total: 100.0,
                 observed_aggregation_count: 1.0,
                 observed_network_density: 0.2,
                 observed_mean_stress: 0.3,
+                observed_cagr_percent: 0.0,
             },
             crate::SweepSummaryRow {
                 scenario_id: "x".to_string(),
@@ -750,10 +752,12 @@ mod tests {
                 fit_error_aggregation: 0.0,
                 fit_error_network_density: 0.0,
                 fit_error_stress: 0.0,
+                observed_start_population_total: 300.0,
                 observed_population_total: 300.0,
                 observed_aggregation_count: 2.0,
                 observed_network_density: 0.6,
                 observed_mean_stress: 0.5,
+                observed_cagr_percent: 0.0,
             },
         ];
 

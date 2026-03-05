@@ -540,21 +540,21 @@ impl TickEngine {
             let disease_pressure = clamp01(infected_share(settlement));
             let burden_pressure = clamp01((settlement.burden_multiplier - 1.0) / 2.0);
             let emergency_pressure = if settlement.food.emergency_reciprocity_last_tick {
-                0.08
+                0.015
             } else {
                 0.0
             };
 
             let birth_suppression =
-                (0.60 * stress + 0.25 * disease_pressure + 0.15 * burden_pressure).clamp(0.0, 0.90);
+                (0.25 * stress + 0.10 * disease_pressure + 0.08 * burden_pressure).clamp(0.0, 0.75);
             let births = (popf * birth_rate_season * (1.0 - birth_suppression))
                 .round()
                 .max(0.0) as u32;
 
             let death_rate = death_base_season
-                + 0.060 * stress
-                + 0.035 * disease_pressure
-                + 0.020 * burden_pressure
+                + 0.018 * stress
+                + 0.012 * disease_pressure
+                + 0.008 * burden_pressure
                 + emergency_pressure;
             let deaths = (popf * death_rate.clamp(0.0, 0.35)).round().max(0.0) as u32;
 

@@ -64,6 +64,10 @@ life_table_csv_path = "input/neolithicdemographytable.csv"
 [mvp.gui]
 live_update_every_ticks = 0
 
+[mvp.resources]
+yield_multiplier = 1.0
+stores_multiplier = 1.0
+
 [coupling.stress_weights]
 food = 0.30
 water = 0.25

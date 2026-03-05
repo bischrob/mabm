@@ -169,6 +169,11 @@ pub fn validate_config(cfg: &AppConfig) -> Result<(), ConfigError> {
             "mvp.gui.live_update_every_ticks must be 0 or <= mvp.ticks".to_string(),
         ));
     }
+    if cfg.mvp.resources.yield_multiplier <= 0.0 || cfg.mvp.resources.stores_multiplier <= 0.0 {
+        return Err(ConfigError::Validation(
+            "mvp.resources multipliers must be > 0.0".to_string(),
+        ));
+    }
     if cfg.mvp.demography.life_table_csv_path.trim().is_empty() {
         return Err(ConfigError::Validation(
             "mvp.demography.life_table_csv_path must be non-empty".to_string(),

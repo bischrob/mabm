@@ -39,6 +39,8 @@ pub struct MvpRunConfig {
     pub demography: DemographyConfig,
     #[serde(default)]
     pub gui: GuiRuntimeConfig,
+    #[serde(default)]
+    pub resources: SyntheticResourceConfig,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -77,6 +79,22 @@ impl Default for MvpRunConfig {
             metrics: MetricsConfig::default(),
             demography: DemographyConfig::default(),
             gui: GuiRuntimeConfig::default(),
+            resources: SyntheticResourceConfig::default(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct SyntheticResourceConfig {
+    pub yield_multiplier: f32,
+    pub stores_multiplier: f32,
+}
+
+impl Default for SyntheticResourceConfig {
+    fn default() -> Self {
+        Self {
+            yield_multiplier: 1.0,
+            stores_multiplier: 1.0,
         }
     }
 }
@@ -289,8 +307,10 @@ pub fn build_synthetic_state(cfg: &MvpRunConfig) -> SimulationState {
                     alt_fuel: rng.next_f32_range(0.0, 500.0),
                 },
                 food: FoodState {
-                    yield_kcal: rng.next_f32_range(2.0e7, 7.0e7),
-                    stores_kcal: rng.next_f32_range(1.0e7, 5.0e7),
+                    yield_kcal: rng.next_f32_range(2.0e7, 7.0e7)
+                        * cfg.resources.yield_multiplier.max(0.0),
+                    stores_kcal: rng.next_f32_range(1.0e7, 5.0e7)
+                        * cfg.resources.stores_multiplier.max(0.0),
                     deficit_kcal: 0.0,
                     ..FoodState::default()
                 },

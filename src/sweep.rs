@@ -121,10 +121,12 @@ pub struct SweepSummaryRow {
     pub fit_error_aggregation: f32,
     pub fit_error_network_density: f32,
     pub fit_error_stress: f32,
+    pub observed_start_population_total: f32,
     pub observed_population_total: f32,
     pub observed_aggregation_count: f32,
     pub observed_network_density: f32,
     pub observed_mean_stress: f32,
+    pub observed_cagr_percent: f32,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -371,9 +373,23 @@ fn run_sweep_job(cfg: &AppConfig, sweep: &SweepConfig, job: SweepRunJob) -> Swee
         observed_aggregation_count,
         observed_network_density,
         observed_mean_stress,
+        observed_start_population_total,
+        observed_cagr_percent,
     ) = if sweep.fit_scoring.enabled {
         let maybe_last = result.baseline_metric_rows.last();
+        let maybe_first = result.baseline_metric_rows.first();
         if let Some(last) = maybe_last {
+            let start_pop = maybe_first
+                .map(|f| f.population_total as f32)
+                .unwrap_or(last.population_total as f32);
+            let years = maybe_first
+                .map(|f| (last.year - f.year).max(0.0))
+                .unwrap_or(0.0);
+            let cagr = if years > 0.0 && start_pop > 0.0 {
+                ((last.population_total as f32 / start_pop).powf(1.0 / years) - 1.0) * 100.0
+            } else {
+                0.0
+            };
             let obs_pop = last.population_total as f32;
             let obs_agg = last.aggregation_count as f32;
             let obs_density = last.network_density;
@@ -410,13 +426,27 @@ fn run_sweep_job(cfg: &AppConfig, sweep: &SweepConfig, job: SweepRunJob) -> Swee
                 obs_agg,
                 obs_density,
                 obs_stress,
+                start_pop,
+                cagr,
             )
         } else {
-            (0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0)
+            (0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         }
     } else {
         let maybe_last = result.baseline_metric_rows.last();
+        let maybe_first = result.baseline_metric_rows.first();
         if let Some(last) = maybe_last {
+            let start_pop = maybe_first
+                .map(|f| f.population_total as f32)
+                .unwrap_or(last.population_total as f32);
+            let years = maybe_first
+                .map(|f| (last.year - f.year).max(0.0))
+                .unwrap_or(0.0);
+            let cagr = if years > 0.0 && start_pop > 0.0 {
+                ((last.population_total as f32 / start_pop).powf(1.0 / years) - 1.0) * 100.0
+            } else {
+                0.0
+            };
             (
                 0.0,
                 0.0,
@@ -427,9 +457,11 @@ fn run_sweep_job(cfg: &AppConfig, sweep: &SweepConfig, job: SweepRunJob) -> Swee
                 last.aggregation_count as f32,
                 last.network_density,
                 mean_stress_composite,
+                start_pop,
+                cagr,
             )
         } else {
-            (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+            (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         }
     };
 
@@ -452,10 +484,12 @@ fn run_sweep_job(cfg: &AppConfig, sweep: &SweepConfig, job: SweepRunJob) -> Swee
         fit_error_aggregation,
         fit_error_network_density,
         fit_error_stress,
+        observed_start_population_total,
         observed_population_total,
         observed_aggregation_count,
         observed_network_density,
         observed_mean_stress,
+        observed_cagr_percent,
     }
 }
 

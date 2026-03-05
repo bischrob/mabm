@@ -110,6 +110,10 @@ Goal:
    - configurable GUI update frequency in ticks (`mvp.gui.live_update_every_ticks`)
    - run-time tick override control in GUI/API
    - population graph axis ticks and hex-map legend
+26. `[x]` Long-horizon high-hex transition sweep iteration completed:
+   - lower-population, long-timespan parameter sweeps executed
+   - early population-drop diagnosis completed (stress/resource pressure vs space)
+   - tuned to near-stable slight-positive growth regime
 
 ## In Progress (Current MVP Build)
 
