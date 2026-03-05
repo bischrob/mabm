@@ -48,16 +48,24 @@ Military load and doctrine context:
 
 - Knapik, Reynolds, Harman (1996), overview/review hosted by Borden Institute:
   - https://medcoeckapwstorprd01.blob.core.usgovcloudapi.net/pfw-images/dbimages/Ch%2016.pdf
+
+TODO: note that the above reference does not seem appropriate. Make a note in an errors log about this.
+
 - Army field-manual lineage for foot marching (historical context; newer ATP lineages now common):
-  - FM 21-18 landing page (archived/manual index): https://www.infantrydrills.com/FM_21-18.htm
+  - FM 21-18 landing page (archived/manual index): https://www.infantrydrills.com/FM_21-18.html
+
   - Current doctrinal replacement lineage example (ATP 3-21.18): https://armypubs.army.mil/epubs/DR_pubs/DR_a/ARN40032-ATP_3-21.18-000-WEB-1.pdf
+
+TODO: Above links do not resolve. Stick to peer-reviewed articles. Make a note in an errors log about this.
 
 Porter/high-load evidence:
 
-- Basnyat & Schepens (2001), PubMed record (indexed as High Alt Med Biol):
-  - https://pubmed.ncbi.nlm.nih.gov/11426519/
+- Basnyat & Schepens (2001) 
+  - https://journals.sagepub.com/doi/abs/10.1089/152702901750265431
 - Bastien et al. (2005), Science:
-  - https://pubmed.ncbi.nlm.nih.gov/15947178/
+  - https://link.springer.com/article/10.1007/s00421-004-1286-z
+
+TODO: I updated the above two links that were incorrect. Make a note in an errors log about this.
 
 Energy-cost model:
 

@@ -38,4 +38,6 @@ Sources:
 - Tobler (1993): https://escholarship.org/uc/item/05r820mz
 - GRASS `r.walk` manual: https://grass.osgeo.org/grass-stable/manuals/r.walk.html
 - Minetti et al. (2002): https://pubmed.ncbi.nlm.nih.gov/12183501/
-- Herzog (2013): https://www.uni-tuebingen.de/fileadmin/Uni_Tuebingen/Fakultaeten/Philo_Historische_Fakultaet/Institut_fuer_Ur-_und_Fruehgeschichte/Herzog_2013a.pdf
+- Herzog (2013): TODO: unsure of this reference
+
+TODO: Note in the error log that this link does not resolve: https://www.uni-tuebingen.de/fileadmin/Uni_Tuebingen/Fakultaeten/Philo_Historische_Fakultaet/Institut_fuer_Ur-_und_Fruehgeschichte/Herzog_2013a.pdf

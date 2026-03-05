@@ -1,5 +1,7 @@
 # Disease Model Hex Mixing SEIR
 
+TODO (human): note that TODO (human) can be ignored by codex. Evaluate all of the references for accuracy.
+
 Purpose:
 
 - Evaluate proposed network-based SEIR approach.
