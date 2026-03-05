@@ -13,6 +13,7 @@ pub struct RunManifestFiles {
     pub network_snapshot_csv: Option<String>,
     pub sweep_summary_csv: Option<String>,
     pub fit_calibration_csv: Option<String>,
+    pub settlement_snapshot_csv: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -23,6 +24,7 @@ pub struct RunManifestSummary {
     pub deposition_rows: usize,
     pub network_rows: usize,
     pub sweep_rows: usize,
+    pub settlement_snapshot_rows: usize,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

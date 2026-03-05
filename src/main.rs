@@ -34,6 +34,18 @@ fn main() {
         out_path.display()
     );
 
+    let settlement_path = out_dir.join(format!(
+        "{}_{}_settlement_snapshot.csv",
+        cfg.scenario_id, result.final_state.version.run_id
+    ));
+    mabm::write_settlement_snapshot_csv(&settlement_path, &result.settlement_rows)
+        .expect("write settlement snapshot CSV");
+    println!(
+        "settlement snapshot: rows={} file={}",
+        result.settlement_rows.len(),
+        settlement_path.display()
+    );
+
     if cfg.mvp.metrics.enable_baseline_metrics {
         let metrics_path = out_dir.join(format!(
             "{}_{}_baseline_metrics.csv",
@@ -135,6 +147,7 @@ fn main() {
         fit_calibration_csv: fit_calibration_path
             .as_ref()
             .map(|p| mabm::relative_or_absolute_string(out_dir, p)),
+        settlement_snapshot_csv: Some(mabm::relative_or_absolute_string(out_dir, &settlement_path)),
     };
     let summary = mabm::RunManifestSummary {
         settlement_count: result.final_state.settlements.len(),
@@ -143,6 +156,7 @@ fn main() {
         deposition_rows: result.deposition_rows.len(),
         network_rows: result.network_rows.len(),
         sweep_rows: sweep_rows_count,
+        settlement_snapshot_rows: result.settlement_rows.len(),
     };
     let manifest = mabm::RunManifest::from_parts(
         &cfg.scenario_id,

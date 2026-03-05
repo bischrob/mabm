@@ -29,9 +29,10 @@ pub use model::{
 };
 pub use mvp::{build_synthetic_state, run_mvp_simulation, MvpRunConfig, MvpRunResult};
 pub use output::{
-    collect_network_snapshot_rows, collect_trait_deposition_rows, collect_trait_frequency_rows,
-    write_network_snapshot_csv, write_trait_deposition_csv, write_trait_frequency_csv,
-    NetworkInteractionSnapshotRow, SettlementTraitDepositionRow, SettlementTraitFrequencyRow,
+    collect_network_snapshot_rows, collect_settlement_snapshot_rows, collect_trait_deposition_rows,
+    collect_trait_frequency_rows, write_network_snapshot_csv, write_settlement_snapshot_csv,
+    write_trait_deposition_csv, write_trait_frequency_csv, NetworkInteractionSnapshotRow,
+    SettlementSnapshotRow, SettlementTraitDepositionRow, SettlementTraitFrequencyRow,
 };
 pub use sweep::{
     build_fit_calibration_recommendation, run_sweep, write_fit_calibration_csv,

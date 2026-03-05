@@ -45,6 +45,22 @@ pub struct NetworkInteractionSnapshotRow {
     pub goods_exchanged_kcal: f32,
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct SettlementSnapshotRow {
+    pub run_id: String,
+    pub config_hash: String,
+    pub tick: u32,
+    pub year: f32,
+    pub settlement_id: u32,
+    pub hex_id: u32,
+    pub grid_q: i32,
+    pub grid_r: i32,
+    pub population_total: u32,
+    pub households: u32,
+    pub is_active: bool,
+    pub status: String,
+}
+
 pub fn collect_trait_frequency_rows(state: &SimulationState) -> Vec<SettlementTraitFrequencyRow> {
     let year = state.tick as f32 / 4.0;
     let run_id = state.version.run_id.clone();
@@ -136,6 +152,41 @@ pub fn collect_network_snapshot_rows(
         .collect()
 }
 
+pub fn collect_settlement_snapshot_rows(state: &SimulationState) -> Vec<SettlementSnapshotRow> {
+    let year = state.tick as f32 / 4.0;
+    let run_id = state.version.run_id.clone();
+    let config_hash = state.version.config_hash.clone();
+    let mut settlements: Vec<_> = state.settlements.values().collect();
+    settlements.sort_by_key(|s| s.id);
+    let total = settlements.len();
+    settlements
+        .into_iter()
+        .enumerate()
+        .map(|(idx, s)| {
+            let (q, r) = grid_qr_from_index(idx, total);
+            let active = s.population > 0;
+            SettlementSnapshotRow {
+                run_id: run_id.clone(),
+                config_hash: config_hash.clone(),
+                tick: state.tick,
+                year,
+                settlement_id: s.id,
+                hex_id: s.hex_id,
+                grid_q: q,
+                grid_r: r,
+                population_total: s.population,
+                households: s.households,
+                is_active: active,
+                status: if active {
+                    "active".to_string()
+                } else {
+                    "abandoned".to_string()
+                },
+            }
+        })
+        .collect()
+}
+
 /// This writer exists to persist a compact cultural signal artifact that can be
 /// analyzed independently from full simulation state dumps.
 pub fn write_trait_frequency_csv<P: AsRef<Path>>(
@@ -177,4 +228,24 @@ pub fn write_network_snapshot_csv<P: AsRef<Path>>(
         writer.serialize(row)?;
     }
     writer.flush().map_err(csv::Error::from)
+}
+
+pub fn write_settlement_snapshot_csv<P: AsRef<Path>>(
+    path: P,
+    rows: &[SettlementSnapshotRow],
+) -> Result<(), csv::Error> {
+    let mut writer = csv::WriterBuilder::new()
+        .has_headers(true)
+        .from_path(path)?;
+    for row in rows {
+        writer.serialize(row)?;
+    }
+    writer.flush().map_err(csv::Error::from)
+}
+
+fn grid_qr_from_index(index: usize, total: usize) -> (i32, i32) {
+    let cols = (total as f32).sqrt().ceil().max(1.0) as usize;
+    let q = (index % cols) as i32;
+    let r = (index / cols) as i32;
+    (q, r)
 }

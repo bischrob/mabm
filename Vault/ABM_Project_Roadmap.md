@@ -102,6 +102,10 @@ Goal:
    - `input/neolithicdemographytable.csv` as default demographic baseline
    - `FB(X)` interpreted as female-offspring ASFR (`total ~ 2 * FB(X)` under sex parity)
    - configurable overrides supported in `mvp.demography`
+24. `[x]` GUI visualization layer implemented:
+   - settlement snapshot output for map rendering
+   - hex-grid settlement map with active/abandoned differentiation
+   - population time-series graph from baseline metrics
 
 ## In Progress (Current MVP Build)
 

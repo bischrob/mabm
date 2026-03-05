@@ -198,6 +198,7 @@ pub struct MvpRunResult {
     pub trait_rows: Vec<SettlementTraitFrequencyRow>,
     pub deposition_rows: Vec<crate::output::SettlementTraitDepositionRow>,
     pub network_rows: Vec<crate::output::NetworkInteractionSnapshotRow>,
+    pub settlement_rows: Vec<crate::output::SettlementSnapshotRow>,
     pub baseline_metric_rows: Vec<BaselineMetricRow>,
 }
 
@@ -315,6 +316,7 @@ pub fn run_mvp_simulation(
     let mut trait_rows = Vec::new();
     let mut deposition_rows = Vec::new();
     let mut network_rows = Vec::new();
+    let mut settlement_rows = Vec::new();
     let mut baseline_metric_rows = Vec::new();
     let mut metric_tracker = MetricTracker::new();
 
@@ -344,6 +346,7 @@ pub fn run_mvp_simulation(
                     cfg.validation_outputs.network_min_weight,
                 ));
             }
+            settlement_rows.extend(crate::output::collect_settlement_snapshot_rows(&state));
         }
     }
 
@@ -352,6 +355,7 @@ pub fn run_mvp_simulation(
         trait_rows,
         deposition_rows,
         network_rows,
+        settlement_rows,
         baseline_metric_rows,
     }
 }
