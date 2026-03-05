@@ -90,6 +90,10 @@ Goal:
    - quantile-based target/scale recommendation from sweep outputs
    - calibration config block with robust scale floors
    - per-sweep `fit_calibration.csv` artifact
+21. `[x]` Calibrated synthetic baseline profile checkpointed:
+   - calibrated targets/scales applied to `configs/sweep.toml`
+   - post-calibration sweep rerun and archived in Vault
+   - baseline fit regime recorded for future regression comparisons
 
 ## In Progress (Current MVP Build)
 
@@ -114,7 +118,7 @@ Goal:
 
 MVP is done when all are true:
 
-1. `[ ]` Simulated-data runs complete reproducibly from config.
+1. `[x]` Simulated-data runs complete reproducibly from config.
 2. `[x]` Core mechanisms run without placeholder math for:
    - food/storage `[x]`
    - water/fuel/labor stress `[x]`
