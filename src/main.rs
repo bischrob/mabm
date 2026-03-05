@@ -27,6 +27,20 @@ fn main() {
         out_path.display()
     );
 
+    if cfg.mvp.metrics.enable_baseline_metrics {
+        let metrics_path = out_dir.join(format!(
+            "{}_{}_baseline_metrics.csv",
+            cfg.scenario_id, result.final_state.version.run_id
+        ));
+        mabm::write_baseline_metrics_csv(&metrics_path, &result.baseline_metric_rows)
+            .expect("write baseline metrics CSV");
+        println!(
+            "baseline metrics: rows={} file={}",
+            result.baseline_metric_rows.len(),
+            metrics_path.display()
+        );
+    }
+
     if cfg.mvp.validation_outputs.enable_trait_deposition {
         let dep_path = out_dir.join(format!(
             "{}_{}_trait_deposition.csv",

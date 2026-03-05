@@ -52,6 +52,11 @@ threat_defensibility = true
 cultural_transmission = true
 water_quality_disease_coupling = true
 
+[mvp.metrics]
+enable_baseline_metrics = true
+aggregation_threshold = 200
+network_min_weight = 0.20
+
 [coupling.stress_weights]
 food = 0.30
 water = 0.25

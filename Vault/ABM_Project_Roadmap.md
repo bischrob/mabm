@@ -66,6 +66,10 @@ Goal:
    - config-driven mechanism toggles
    - sweep knockout variants for baseline vs removed-mechanism comparisons
    - summary outputs include knockout label
+15. `[x]` Baseline metric pack implemented:
+   - population trend snapshots
+   - aggregation and abandonment metrics
+   - network structure metrics (edge count, density, mean weight)
 
 ## In Progress (Current MVP Build)
 
@@ -79,14 +83,11 @@ Goal:
 
 ## Next (Highest Priority)
 
-1. `[ ]` Add baseline metric pack:
-   - population trend
-   - aggregation/abandonment counts
-   - network structure metrics
+1. `[ ]` Add sweep-level fit scoring against target pattern metrics.
 
 ## Next After That
 
-1. `[ ]` Add sweep-level fit scoring against target pattern metrics.
+1. `[ ]` Add parallel sweep execution for large parameter grids.
 
 ## MVP Acceptance Gate
 

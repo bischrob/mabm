@@ -9,6 +9,7 @@ pub mod model;
 pub mod mvp;
 pub mod output;
 pub mod sweep;
+pub mod metrics;
 pub mod utils;
 pub mod versioning;
 
@@ -19,6 +20,7 @@ pub use model::{
     SettlementState, SimulationState, WaterState,
 };
 pub use mvp::{build_synthetic_state, run_mvp_simulation, MvpRunConfig, MvpRunResult};
+pub use metrics::{write_baseline_metrics_csv, BaselineMetricRow, MetricTracker};
 pub use output::{
     collect_network_snapshot_rows, collect_trait_deposition_rows, collect_trait_frequency_rows,
     write_network_snapshot_csv, write_trait_deposition_csv, write_trait_frequency_csv,
@@ -267,6 +269,7 @@ mod tests {
         let result = crate::run_mvp_simulation(&cfg, CouplingConfig::default(), None);
         assert!(!result.deposition_rows.is_empty());
         assert!(!result.network_rows.is_empty());
+        assert!(!result.baseline_metric_rows.is_empty());
     }
 
     #[test]
@@ -315,5 +318,24 @@ mod tests {
             .expect("settlement exists")
             .trait_household_counts;
         assert_eq!(before_counts, after_counts);
+    }
+
+    #[test]
+    fn baseline_metric_pack_emits_rows() {
+        let mut cfg = crate::MvpRunConfig {
+            ticks: 8,
+            snapshot_every_ticks: 4,
+            settlement_count: 6,
+            base_population: 100,
+            seed: 23,
+            ..crate::MvpRunConfig::default()
+        };
+        cfg.metrics.enable_baseline_metrics = true;
+        cfg.metrics.aggregation_threshold = 120;
+        let result = crate::run_mvp_simulation(&cfg, CouplingConfig::default(), None);
+        assert!(!result.baseline_metric_rows.is_empty());
+        for r in &result.baseline_metric_rows {
+            assert!((0.0..=1.0).contains(&r.network_density));
+        }
     }
 }

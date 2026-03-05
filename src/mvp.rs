@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     climate::{generate_pdsi_series, SyntheticClimateConfig},
     engine::{CouplingConfig, TickEngine},
+    metrics::{BaselineMetricRow, MetricTracker},
     model::{
         ClimateState, DiseaseState, FoodState, FuelState, LaborState, SettlementState,
         SimulationState, WaterState, MVP_TRAIT_COUNT,
@@ -31,6 +32,8 @@ pub struct MvpRunConfig {
     pub validation_outputs: ValidationOutputConfig,
     #[serde(default)]
     pub mechanisms: MechanismToggleConfig,
+    #[serde(default)]
+    pub metrics: MetricsConfig,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -66,6 +69,7 @@ impl Default for MvpRunConfig {
             culture: CultureConfig::default(),
             validation_outputs: ValidationOutputConfig::default(),
             mechanisms: MechanismToggleConfig::default(),
+            metrics: MetricsConfig::default(),
         }
     }
 }
@@ -148,12 +152,30 @@ impl Default for MechanismToggleConfig {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct MetricsConfig {
+    pub enable_baseline_metrics: bool,
+    pub aggregation_threshold: u32,
+    pub network_min_weight: f32,
+}
+
+impl Default for MetricsConfig {
+    fn default() -> Self {
+        Self {
+            enable_baseline_metrics: true,
+            aggregation_threshold: 200,
+            network_min_weight: 0.20,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct MvpRunResult {
     pub final_state: SimulationState,
     pub trait_rows: Vec<SettlementTraitFrequencyRow>,
     pub deposition_rows: Vec<crate::output::SettlementTraitDepositionRow>,
     pub network_rows: Vec<crate::output::NetworkInteractionSnapshotRow>,
+    pub baseline_metric_rows: Vec<BaselineMetricRow>,
 }
 
 pub fn build_synthetic_state(cfg: &MvpRunConfig) -> SimulationState {
@@ -253,6 +275,8 @@ pub fn run_mvp_simulation(
     let mut trait_rows = Vec::new();
     let mut deposition_rows = Vec::new();
     let mut network_rows = Vec::new();
+    let mut baseline_metric_rows = Vec::new();
+    let mut metric_tracker = MetricTracker::new();
 
     for _ in 0..cfg.ticks {
         engine.run_one_tick(&mut state);
@@ -261,6 +285,13 @@ pub fn run_mvp_simulation(
         }
         if state.tick % cfg.snapshot_every_ticks == 0 {
             trait_rows.extend(collect_trait_frequency_rows(&state));
+            if cfg.metrics.enable_baseline_metrics {
+                baseline_metric_rows.push(metric_tracker.snapshot(
+                    &state,
+                    cfg.metrics.aggregation_threshold,
+                    cfg.metrics.network_min_weight,
+                ));
+            }
             if cfg.validation_outputs.enable_trait_deposition {
                 deposition_rows.extend(crate::output::collect_trait_deposition_rows(&state));
             }
@@ -278,6 +309,7 @@ pub fn run_mvp_simulation(
         trait_rows,
         deposition_rows,
         network_rows,
+        baseline_metric_rows,
     }
 }
 

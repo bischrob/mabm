@@ -152,6 +152,16 @@ pub fn validate_config(cfg: &AppConfig) -> Result<(), ConfigError> {
             "mvp.validation_outputs.network_min_weight must be within [0.0, 1.0]".to_string(),
         ));
     }
+    if cfg.mvp.metrics.aggregation_threshold == 0 {
+        return Err(ConfigError::Validation(
+            "mvp.metrics.aggregation_threshold must be > 0".to_string(),
+        ));
+    }
+    if !(0.0..=1.0).contains(&cfg.mvp.metrics.network_min_weight) {
+        return Err(ConfigError::Validation(
+            "mvp.metrics.network_min_weight must be within [0.0, 1.0]".to_string(),
+        ));
+    }
     if let Some(sweep) = &cfg.sweep {
         if sweep.enabled {
             if sweep.ranges.sigma_seed_values.is_empty()
