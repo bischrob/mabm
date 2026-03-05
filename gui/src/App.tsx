@@ -387,8 +387,10 @@ export function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <h1>MABM Run Console</h1>
-        <div className="runbox">
+        <div className="topbar-head">
+          <h1>MABM Run Console</h1>
+        </div>
+        <div className="runbox runbox-config">
           <label>
             Config:
             <select
@@ -413,7 +415,7 @@ export function App() {
           <button onClick={refreshIndex}>Refresh</button>
           <button onClick={refreshConfigs}>Refresh Configs</button>
         </div>
-        <div className="runbox">
+        <div className="runbox runbox-runtime">
           <div>Tick: {currentTick}</div>
           <label>
             Ticks:
@@ -446,7 +448,7 @@ export function App() {
               className="small"
             />
           </label>
-          <label>
+          <label className="inline-check">
             <input
               type="checkbox"
               checked={lockSeed}
@@ -456,7 +458,7 @@ export function App() {
           </label>
         </div>
         {selectedConfigMeta ? (
-          <div className="runbox">
+          <div className="runbox runbox-meta">
             <div>
               <strong>Scenario:</strong> {selectedConfigMeta.scenario_id || "-"}
             </div>
@@ -613,7 +615,7 @@ export function App() {
                 className="cfg"
               />
             </label>
-            <label>
+            <label className="editor-checkbox">
               <input
                 type="checkbox"
                 checked={editor.use_gis_hex_inputs}

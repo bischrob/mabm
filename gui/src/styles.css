@@ -35,12 +35,16 @@ body {
 }
 
 .topbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 16px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--vp-c-border);
+}
+
+.topbar-head {
+  display: flex;
+  align-items: center;
 }
 
 .topbar h1 {
@@ -51,12 +55,14 @@ body {
 
 .runbox {
   display: flex;
-  gap: 10px;
-  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: flex-end;
 }
 
 .cfg {
-  min-width: 320px;
+  min-width: 260px;
+  width: min(100%, 560px);
 }
 
 button,
@@ -77,6 +83,21 @@ label {
   gap: 6px;
   color: var(--vp-c-text-2);
   font-size: 0.85rem;
+}
+
+.runbox label {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  align-items: start;
+}
+
+.runbox label.inline-check {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 2px;
 }
 
 input.small {
@@ -208,19 +229,63 @@ pre {
 
 .editor-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.editor-grid label {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  min-width: 0;
+}
+
+.editor-grid .cfg,
+.editor-grid .small {
+  width: 100%;
+  min-width: 0;
+}
+
+.editor-grid .small {
+  max-width: none;
+}
+
+.editor-grid .editor-checkbox {
+  display: flex;
+  flex-direction: row;
   align-items: center;
+  gap: 8px;
+  padding-top: 24px;
+}
+
+.editor-grid button {
+  height: 40px;
+  align-self: end;
+  justify-self: stretch;
 }
 
 @media (max-width: 900px) {
   .grid {
     grid-template-columns: 1fr;
   }
-  .runbox {
-    flex-wrap: wrap;
-  }
   .cfg {
-    min-width: 180px;
+    min-width: 0;
+    width: 100%;
+  }
+  .runbox {
+    align-items: stretch;
+  }
+  .runbox > * {
+    flex: 1 1 220px;
+  }
+  .runbox button {
+    flex: 0 0 auto;
+  }
+  .editor-grid {
+    grid-template-columns: 1fr;
+  }
+  .editor-grid .editor-checkbox {
+    padding-top: 0;
   }
 }
