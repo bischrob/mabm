@@ -5,3 +5,4 @@ gui/dist/
 gui/api.stdout.log
 gui/api.stderr.log
 /package-lock.json
+input/gis/

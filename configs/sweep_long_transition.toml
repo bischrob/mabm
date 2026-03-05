@@ -70,6 +70,8 @@ flat_travel_km_per_day = 36.0
 population_capacity_per_hex = 500.0
 min_population_capacity_per_hex = 40.0
 stores_capacity_fraction = 0.20
+use_gis_hex_inputs = true
+gis_hex_csv_path = "input/phoenix_basin_hex_attributes.csv"
 
 [mvp.gui]
 live_update_every_ticks = 0

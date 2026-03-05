@@ -294,13 +294,11 @@ pub fn collect_settlement_snapshot_rows(state: &SimulationState) -> Vec<Settleme
             let drought_index_5y = hex_profile.map_or(0.0, |h| h.drought_index_5y);
             let defensibility = hex_profile.map_or(0.0, |h| h.defensibility);
             let climate_pdsi = hex_profile.map_or(0.0, |h| {
-                (regional_pdsi * h.climate_local_multiplier + h.climate_local_offset).clamp(-6.0, 6.0)
+                (regional_pdsi * h.climate_local_multiplier + h.climate_local_offset)
+                    .clamp(-6.0, 6.0)
             });
-            let food_capacity_persons = estimate_food_capacity_persons_from_hex(
-                state,
-                food_yield_kcal,
-                food_stores_kcal,
-            );
+            let food_capacity_persons =
+                estimate_food_capacity_persons_from_hex(state, food_yield_kcal, food_stores_kcal);
             let hex_quality = compute_hex_quality(
                 state,
                 food_capacity_persons,
@@ -416,7 +414,10 @@ fn grid_qr_from_hex_id(hex_id: u32, total_hexes: u32) -> (i32, i32) {
     (q, r)
 }
 
-fn estimate_food_capacity_persons(state: &SimulationState, s: &crate::model::SettlementState) -> f32 {
+fn estimate_food_capacity_persons(
+    state: &SimulationState,
+    s: &crate::model::SettlementState,
+) -> f32 {
     let sp = &state.spatial_policy;
     let need_person = 2500.0 * 90.0 * s.burden_multiplier.max(0.5);
     let effective_kcal = s.food.yield_kcal.max(0.0)
@@ -428,7 +429,8 @@ fn estimate_food_capacity_persons(state: &SimulationState, s: &crate::model::Set
     };
     raw.clamp(
         sp.min_population_capacity_per_hex.max(1.0),
-        sp.population_capacity_per_hex.max(sp.min_population_capacity_per_hex.max(1.0)),
+        sp.population_capacity_per_hex
+            .max(sp.min_population_capacity_per_hex.max(1.0)),
     )
 }
 
@@ -439,8 +441,8 @@ fn estimate_food_capacity_persons_from_hex(
 ) -> f32 {
     let sp = &state.spatial_policy;
     let need_person = 2500.0 * 90.0;
-    let effective_kcal =
-        food_yield_kcal.max(0.0) + sp.stores_capacity_fraction.clamp(0.0, 1.0) * food_stores_kcal.max(0.0);
+    let effective_kcal = food_yield_kcal.max(0.0)
+        + sp.stores_capacity_fraction.clamp(0.0, 1.0) * food_stores_kcal.max(0.0);
     let raw = if need_person > 0.0 {
         effective_kcal / need_person
     } else {
@@ -448,7 +450,8 @@ fn estimate_food_capacity_persons_from_hex(
     };
     raw.clamp(
         sp.min_population_capacity_per_hex.max(1.0),
-        sp.population_capacity_per_hex.max(sp.min_population_capacity_per_hex.max(1.0)),
+        sp.population_capacity_per_hex
+            .max(sp.min_population_capacity_per_hex.max(1.0)),
     )
 }
 
@@ -466,10 +469,7 @@ fn compute_hex_quality(
     drought_index_5y: f32,
 ) -> f32 {
     let food_norm = (food_capacity_persons
-        / state
-            .spatial_policy
-            .population_capacity_per_hex
-            .max(1.0))
+        / state.spatial_policy.population_capacity_per_hex.max(1.0))
     .clamp(0.0, 1.0);
     let water_norm = (0.5 * (water_reliability + water_quality)).clamp(0.0, 1.0);
     let fuel_norm = (fuel_stock / 8_000.0).clamp(0.0, 1.0);

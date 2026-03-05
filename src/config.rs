@@ -94,7 +94,7 @@ pub fn validate_config(cfg: &AppConfig) -> Result<(), ConfigError> {
             "mvp.settlement_count must be > 0".to_string(),
         ));
     }
-    if cfg.mvp.settlement_count > cfg.mvp.hex_count {
+    if !cfg.mvp.spatial.use_gis_hex_inputs && cfg.mvp.settlement_count > cfg.mvp.hex_count {
         return Err(ConfigError::Validation(
             "mvp.settlement_count must be <= mvp.hex_count".to_string(),
         ));
@@ -124,7 +124,8 @@ pub fn validate_config(cfg: &AppConfig) -> Result<(), ConfigError> {
             "mvp.spatial.min_population_capacity_per_hex must be > 0.0".to_string(),
         ));
     }
-    if cfg.mvp.spatial.min_population_capacity_per_hex > cfg.mvp.spatial.population_capacity_per_hex {
+    if cfg.mvp.spatial.min_population_capacity_per_hex > cfg.mvp.spatial.population_capacity_per_hex
+    {
         return Err(ConfigError::Validation(
             "mvp.spatial.min_population_capacity_per_hex must be <= mvp.spatial.population_capacity_per_hex".to_string(),
         ));
@@ -133,6 +134,20 @@ pub fn validate_config(cfg: &AppConfig) -> Result<(), ConfigError> {
         return Err(ConfigError::Validation(
             "mvp.spatial.stores_capacity_fraction must be within [0.0, 1.0]".to_string(),
         ));
+    }
+    if cfg.mvp.spatial.use_gis_hex_inputs {
+        if cfg.mvp.spatial.gis_hex_csv_path.trim().is_empty() {
+            return Err(ConfigError::Validation(
+                "mvp.spatial.gis_hex_csv_path must be non-empty when use_gis_hex_inputs=true"
+                    .to_string(),
+            ));
+        }
+        if !Path::new(&cfg.mvp.spatial.gis_hex_csv_path).exists() {
+            return Err(ConfigError::Validation(format!(
+                "mvp.spatial.gis_hex_csv_path does not exist: {}",
+                cfg.mvp.spatial.gis_hex_csv_path
+            )));
+        }
     }
     if !(0.0..=0.5).contains(&cfg.mvp.storage.sigma_seed) {
         return Err(ConfigError::Validation(

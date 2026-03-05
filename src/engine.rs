@@ -533,7 +533,8 @@ impl TickEngine {
                 let donor_buffer = donor.3 as f32 * 2500.0 * 30.0;
                 let donor_surplus = (donor.6 - donor_buffer).max(0.0);
                 let receiver_need = receiver.7.max(0.0);
-                let transfer_cap = (donor.6 * 0.03 * weight * (1.0 - 0.35 * travel_penalty)).max(0.0);
+                let transfer_cap =
+                    (donor.6 * 0.03 * weight * (1.0 - 0.35 * travel_penalty)).max(0.0);
                 let transfer = donor_surplus.min(receiver_need).min(transfer_cap);
 
                 if transfer > 0.0 {
@@ -567,8 +568,14 @@ impl TickEngine {
 
     fn update_demography(&self, state: &mut SimulationState, season: Season) {
         let capacity_max = state.spatial_policy.population_capacity_per_hex.max(1.0);
-        let capacity_min = state.spatial_policy.min_population_capacity_per_hex.max(1.0);
-        let stores_capacity_fraction = state.spatial_policy.stores_capacity_fraction.clamp(0.0, 1.0);
+        let capacity_min = state
+            .spatial_policy
+            .min_population_capacity_per_hex
+            .max(1.0);
+        let stores_capacity_fraction = state
+            .spatial_policy
+            .stores_capacity_fraction
+            .clamp(0.0, 1.0);
 
         for settlement in state.settlements.values_mut() {
             if settlement.population == 0 {

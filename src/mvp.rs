@@ -1,3 +1,5 @@
+use std::{collections::BTreeMap, path::Path};
+
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -98,6 +100,10 @@ pub struct SpatialConfig {
     pub min_population_capacity_per_hex: f32,
     #[serde(default = "default_stores_capacity_fraction")]
     pub stores_capacity_fraction: f32,
+    #[serde(default)]
+    pub use_gis_hex_inputs: bool,
+    #[serde(default = "default_gis_hex_csv_path")]
+    pub gis_hex_csv_path: String,
 }
 
 impl Default for SpatialConfig {
@@ -108,6 +114,8 @@ impl Default for SpatialConfig {
             population_capacity_per_hex: 3_000.0,
             min_population_capacity_per_hex: default_min_population_capacity_per_hex(),
             stores_capacity_fraction: default_stores_capacity_fraction(),
+            use_gis_hex_inputs: false,
+            gis_hex_csv_path: default_gis_hex_csv_path(),
         }
     }
 }
@@ -118,6 +126,10 @@ fn default_min_population_capacity_per_hex() -> f32 {
 
 fn default_stores_capacity_fraction() -> f32 {
     0.25
+}
+
+fn default_gis_hex_csv_path() -> String {
+    "input/phoenix_basin_hex_attributes.csv".to_string()
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -275,9 +287,7 @@ pub struct MvpRunResult {
 pub fn build_synthetic_state(cfg: &MvpRunConfig) -> SimulationState {
     let mut sim = SimulationState::default();
     let mut rng = Lcg::new(cfg.seed);
-    let hex_count = cfg.hex_count.max(cfg.settlement_count).max(1);
     sim.simulation_seed = cfg.seed;
-    sim.hex_count = hex_count;
     sim.climate_forcing_pdsi = generate_pdsi_series(cfg.ticks, &cfg.climate, cfg.seed);
     sim.storage_policy.sigma_seed = cfg.storage.sigma_seed;
     sim.storage_policy.spoilage_rate = cfg.storage.spoilage_rate;
@@ -315,70 +325,108 @@ pub fn build_synthetic_state(cfg: &MvpRunConfig) -> SimulationState {
     sim.demography_policy.annual_death_rate = annual_death_rate.max(0.0);
     sim.spatial_policy.hex_diameter_km = cfg.spatial.hex_diameter_km.max(0.01);
     sim.spatial_policy.flat_travel_km_per_day = cfg.spatial.flat_travel_km_per_day.max(0.01);
-    sim.spatial_policy.population_capacity_per_hex = cfg.spatial.population_capacity_per_hex.max(1.0);
+    sim.spatial_policy.population_capacity_per_hex =
+        cfg.spatial.population_capacity_per_hex.max(1.0);
     sim.spatial_policy.min_population_capacity_per_hex =
         cfg.spatial.min_population_capacity_per_hex.max(1.0);
-    sim.spatial_policy.stores_capacity_fraction = cfg.spatial.stores_capacity_fraction.clamp(0.0, 1.0);
+    sim.spatial_policy.stores_capacity_fraction =
+        cfg.spatial.stores_capacity_fraction.clamp(0.0, 1.0);
 
-    // Hex-level heterogeneity exists so empty space has explicit environmental
-    // structure and can serve as meaningful migration/fission destinations.
-    // We intentionally model wide ecological spread so the landscape includes
-    // both near-unlivable and near-ideal hexes.
-    for hid in 1..=hex_count {
-        let mut productivity = rng.next_f32_gaussian_clamped(0.55, 0.30, 0.0, 1.0);
-        let mut harshness = rng.next_f32_gaussian_clamped(0.45, 0.35, 0.0, 1.0);
-
-        // Force heavier tails so a non-trivial share of hexes become extremes.
-        if rng.next_f32() < 0.18 {
-            harshness = (harshness + 0.35).clamp(0.0, 1.0);
-            productivity = (productivity * 0.60).clamp(0.0, 1.0);
+    // GIS-driven initialization exists so MVP dynamics can run against
+    // externally prepared environmental fields instead of only synthetic priors.
+    if cfg.spatial.use_gis_hex_inputs {
+        let path = Path::new(&cfg.spatial.gis_hex_csv_path);
+        let loaded = load_hexes_from_csv(path)
+            .unwrap_or_else(|e| panic!("failed to load GIS hex CSV at {:?}: {}", path, e));
+        if loaded.len() < cfg.settlement_count as usize {
+            panic!(
+                "GIS hex CSV has {} rows, but settlement_count is {}",
+                loaded.len(),
+                cfg.settlement_count
+            );
         }
-        if rng.next_f32() < 0.15 {
-            productivity = (productivity + 0.35).clamp(0.0, 1.0);
-            harshness = (harshness * 0.60).clamp(0.0, 1.0);
+        sim.hex_count = loaded.len() as u32;
+        for hex in loaded {
+            sim.hexes.insert(hex.id, hex);
         }
+    } else {
+        let hex_count = cfg.hex_count.max(cfg.settlement_count).max(1);
+        sim.hex_count = hex_count;
 
-        let mut micro_noise = || rng.next_f32_gaussian_clamped(0.0, 0.08, -0.25, 0.25);
+        // Hex-level heterogeneity exists so empty space has explicit environmental
+        // structure and can serve as meaningful migration/fission destinations.
+        // We intentionally model wide ecological spread so the landscape includes
+        // both near-unlivable and near-ideal hexes.
+        for hid in 1..=hex_count {
+            let mut productivity = rng.next_f32_gaussian_clamped(0.55, 0.30, 0.0, 1.0);
+            let mut harshness = rng.next_f32_gaussian_clamped(0.45, 0.35, 0.0, 1.0);
 
-        let water_reliability =
-            (0.10 + 0.80 * productivity - 0.55 * harshness + micro_noise()).clamp(0.02, 1.0);
-        let water_quality =
-            (0.12 + 0.75 * productivity - 0.45 * harshness + micro_noise()).clamp(0.02, 1.0);
-        let drought_index_5y =
-            (0.15 + 0.85 * harshness - 0.25 * productivity + micro_noise()).clamp(0.0, 1.0);
+            // Force heavier tails so a non-trivial share of hexes become extremes.
+            if rng.next_f32() < 0.18 {
+                harshness = (harshness + 0.35).clamp(0.0, 1.0);
+                productivity = (productivity * 0.60).clamp(0.0, 1.0);
+            }
+            if rng.next_f32() < 0.15 {
+                productivity = (productivity + 0.35).clamp(0.0, 1.0);
+                harshness = (harshness * 0.60).clamp(0.0, 1.0);
+            }
 
-        let food_suitability = (0.55 * productivity + 0.25 * water_reliability
-            - 0.30 * drought_index_5y
-            + micro_noise())
-        .clamp(0.0, 1.0);
-        let fuel_suitability =
-            (0.45 * productivity + 0.25 * water_reliability - 0.20 * harshness + micro_noise())
+            let mut micro_noise = || rng.next_f32_gaussian_clamped(0.0, 0.08, -0.25, 0.25);
+
+            let water_reliability =
+                (0.10 + 0.80 * productivity - 0.55 * harshness + micro_noise()).clamp(0.02, 1.0);
+            let water_quality =
+                (0.12 + 0.75 * productivity - 0.45 * harshness + micro_noise()).clamp(0.02, 1.0);
+            let drought_index_5y =
+                (0.15 + 0.85 * harshness - 0.25 * productivity + micro_noise()).clamp(0.0, 1.0);
+
+            let food_suitability = (0.55 * productivity + 0.25 * water_reliability
+                - 0.30 * drought_index_5y
+                + micro_noise())
+            .clamp(0.0, 1.0);
+            let fuel_suitability =
+                (0.45 * productivity + 0.25 * water_reliability - 0.20 * harshness + micro_noise())
+                    .clamp(0.0, 1.0);
+
+            let food_yield_kcal =
+                lerp(2.0e6, 1.8e8, food_suitability) * cfg.resources.yield_multiplier.max(0.0);
+            let food_store_factor =
+                rng.next_f32_gaussian_clamped(0.28 + 0.45 * food_suitability, 0.20, 0.0, 0.95);
+            let food_stores_kcal =
+                (food_yield_kcal * food_store_factor) * cfg.resources.stores_multiplier.max(0.0);
+            let fuel_stock = lerp(50.0, 8_500.0, fuel_suitability);
+            let defensibility = (rng.next_f32_gaussian_clamped(0.5, 0.33, 0.0, 1.0)
+                + 0.25 * harshness)
                 .clamp(0.0, 1.0);
 
-        let food_yield_kcal = lerp(2.0e6, 1.8e8, food_suitability)
-            * cfg.resources.yield_multiplier.max(0.0);
-        let food_store_factor = rng.next_f32_gaussian_clamped(0.28 + 0.45 * food_suitability, 0.20, 0.0, 0.95);
-        let food_stores_kcal =
-            (food_yield_kcal * food_store_factor) * cfg.resources.stores_multiplier.max(0.0);
-        let fuel_stock = lerp(50.0, 8_500.0, fuel_suitability);
-        let defensibility =
-            (rng.next_f32_gaussian_clamped(0.5, 0.33, 0.0, 1.0) + 0.25 * harshness).clamp(0.0, 1.0);
-
-        let hex = HexState {
-            id: hid,
-            climate_local_multiplier: rng.next_f32_gaussian_clamped(1.0 + 0.35 * (harshness - 0.5), 0.22, 0.55, 1.45),
-            climate_local_offset: rng.next_f32_gaussian_clamped((harshness - 0.5) * 1.0, 0.40, -1.3, 1.3),
-            drought_index_5y,
-            water_reliability,
-            water_quality,
-            fuel_stock,
-            food_yield_kcal,
-            food_stores_kcal,
-            defensibility,
-        };
-        sim.hexes.insert(hid, hex);
+            let hex = HexState {
+                id: hid,
+                climate_local_multiplier: rng.next_f32_gaussian_clamped(
+                    1.0 + 0.35 * (harshness - 0.5),
+                    0.22,
+                    0.55,
+                    1.45,
+                ),
+                climate_local_offset: rng.next_f32_gaussian_clamped(
+                    (harshness - 0.5) * 1.0,
+                    0.40,
+                    -1.3,
+                    1.3,
+                ),
+                drought_index_5y,
+                water_reliability,
+                water_quality,
+                fuel_stock,
+                food_yield_kcal,
+                food_stores_kcal,
+                defensibility,
+            };
+            sim.hexes.insert(hid, hex);
+        }
     }
 
+    let available_hex_ids: Vec<u32> = sim.hexes.keys().copied().collect();
+    let hex_len = available_hex_ids.len().max(1);
     for sid in 0..cfg.settlement_count {
         // Keep initialization deterministic and interpretable for calibration runs.
         let population = cfg.base_population;
@@ -388,7 +436,8 @@ pub fn build_synthetic_state(cfg: &MvpRunConfig) -> SimulationState {
             *v = rng.next_u32() % households.max(1);
         }
 
-        let hex_id = 1 + ((sid as u64 * hex_count as u64) / cfg.settlement_count.max(1) as u64) as u32;
+        let idx = (sid as usize * hex_len) / cfg.settlement_count.max(1) as usize;
+        let hex_id = available_hex_ids[idx.min(hex_len - 1)];
         let hex = sim
             .hexes
             .get(&hex_id)
@@ -592,4 +641,58 @@ impl Lcg {
 
 fn lerp(min: f32, max: f32, t: f32) -> f32 {
     min + (max - min) * t.clamp(0.0, 1.0)
+}
+
+#[derive(Debug, Deserialize)]
+struct GisHexCsvRow {
+    hex_id: u32,
+    climate_local_multiplier: f32,
+    climate_local_offset: f32,
+    drought_index_5y: f32,
+    water_reliability: f32,
+    water_quality: f32,
+    fuel_stock: f32,
+    food_yield_kcal: f32,
+    food_stores_kcal: f32,
+    defensibility: f32,
+}
+
+fn load_hexes_from_csv(path: &Path) -> Result<Vec<HexState>, String> {
+    let mut reader = csv::ReaderBuilder::new()
+        .has_headers(true)
+        .from_path(path)
+        .map_err(|e| format!("unable to open CSV: {e}"))?;
+
+    let mut by_source_id: BTreeMap<u32, HexState> = BTreeMap::new();
+    for rec in reader.deserialize::<GisHexCsvRow>() {
+        let row = rec.map_err(|e| format!("CSV parse error: {e}"))?;
+        if row.hex_id == 0 {
+            continue;
+        }
+        by_source_id.entry(row.hex_id).or_insert(HexState {
+            id: row.hex_id,
+            climate_local_multiplier: row.climate_local_multiplier.clamp(0.1, 3.0),
+            climate_local_offset: row.climate_local_offset.clamp(-6.0, 6.0),
+            drought_index_5y: row.drought_index_5y.clamp(0.0, 1.0),
+            water_reliability: row.water_reliability.clamp(0.0, 1.0),
+            water_quality: row.water_quality.clamp(0.0, 1.0),
+            fuel_stock: row.fuel_stock.max(0.0),
+            food_yield_kcal: row.food_yield_kcal.max(0.0),
+            food_stores_kcal: row.food_stores_kcal.max(0.0),
+            defensibility: row.defensibility.clamp(0.0, 1.0),
+        });
+    }
+
+    if by_source_id.is_empty() {
+        return Err("no usable hex rows found".to_string());
+    }
+
+    // Reindex into contiguous IDs so downstream row-based loops remain efficient
+    // even when external GIS IDs have gaps.
+    let mut out = Vec::with_capacity(by_source_id.len());
+    for (idx, mut hex) in by_source_id.into_values().enumerate() {
+        hex.id = (idx + 1) as u32;
+        out.push(hex);
+    }
+    Ok(out)
 }

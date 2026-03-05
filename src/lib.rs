@@ -81,9 +81,7 @@ mod tests {
                     reliability: 0.0,
                     quality: 0.0,
                 },
-                fuel: FuelState {
-                    stock: 2.0,
-                },
+                fuel: FuelState { stock: 2.0 },
                 food: FoodState {
                     yield_kcal: 0.0,
                     stores_kcal: 0.0,
@@ -417,9 +415,7 @@ mod tests {
                     reliability: 1.0,
                     quality: 1.0,
                 },
-                fuel: FuelState {
-                    stock: 1000.0,
-                },
+                fuel: FuelState { stock: 1000.0 },
                 food: FoodState {
                     yield_kcal: 80_000_000.0,
                     stores_kcal: 40_000_000.0,
@@ -456,9 +452,7 @@ mod tests {
                     reliability: 0.1,
                     quality: 0.1,
                 },
-                fuel: FuelState {
-                    stock: 10.0,
-                },
+                fuel: FuelState { stock: 10.0 },
                 food: FoodState {
                     yield_kcal: 10_000.0,
                     stores_kcal: 0.0,
@@ -506,9 +500,7 @@ mod tests {
                     reliability: 0.2,
                     quality: 0.2,
                 },
-                fuel: FuelState {
-                    stock: 1.0,
-                },
+                fuel: FuelState { stock: 1.0 },
                 food: FoodState {
                     yield_kcal: 1_000.0,
                     stores_kcal: 0.0,
@@ -542,9 +534,7 @@ mod tests {
                     reliability: 1.0,
                     quality: 1.0,
                 },
-                fuel: FuelState {
-                    stock: 1000.0,
-                },
+                fuel: FuelState { stock: 1000.0 },
                 food: FoodState {
                     yield_kcal: 80_000_000.0,
                     stores_kcal: 20_000_000.0,
@@ -616,9 +606,7 @@ mod tests {
                     reliability: 1.0,
                     quality: 1.0,
                 },
-                fuel: FuelState {
-                    stock: 1000.0,
-                },
+                fuel: FuelState { stock: 1000.0 },
                 labor: LaborState {
                     seasonal_budget_hours: 5400.0,
                     tier1_survival_hours: 900.0,
@@ -647,9 +635,7 @@ mod tests {
                     reliability: 1.0,
                     quality: 1.0,
                 },
-                fuel: FuelState {
-                    stock: 1000.0,
-                },
+                fuel: FuelState { stock: 1000.0 },
                 labor: LaborState {
                     seasonal_budget_hours: 5400.0,
                     tier1_survival_hours: 900.0,
