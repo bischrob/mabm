@@ -60,3 +60,7 @@ Life expectancy tables must be customizable, similar to GIS inputs:
    - `FB(X)` is treated as annual age-specific fertility rate for female offspring.
    - Under sex parity, total fertility is approximately `2 * FB(X)`.
    - In crude per-capita birth-rate derivation, this simplifies to weighting `FB(X)` by population age share.
+
+See also:
+
+- [[Archaic_Southwest_Demography_References]] for period-specific demographic trend references and SPD proxy guidance.
