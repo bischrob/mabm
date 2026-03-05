@@ -1,118 +1,109 @@
 # ABM Project Roadmap
 
-Goal: Build a high-scale historical agent-based model in Rust with strong ABM validity and performance engineering discipline.
+Goal:
 
-## 1. Background Research
+- Build a high-scale seasonal ABM in Rust to study long-run demographics, settlement dynamics, and interaction networks in a semi-arid macro-region.
 
-1. Define research scope and target phenomena.
-2. Identify candidate ABM paradigms:
-   - Discrete-time vs event-driven.
-   - Spatial vs network interaction models.
-3. Build a variable inventory from literature:
-   - Agent state variables.
-   - Environment/state transition variables.
-   - Exogenous shock variables.
-4. Define calibration and validation targets:
-   - Stylized facts.
-   - Historical benchmarks/time series.
-5. Specify modeling assumptions explicitly:
-   - Behavioral rules.
-   - Information availability constraints.
-6. Define performance requirements:
-   - Agent count targets.
-   - Tick throughput targets.
-   - Runtime/memory limits per experiment.
-7. Create a data governance plan:
-   - Source provenance.
-   - Data cleaning/reproducibility.
-8. Produce a model specification document (living spec):
-   - ODD-inspired structure (Overview, Design concepts, Details).
+## Status Key
 
-## 2. MVP Simulation at Scale
+- `[x]` completed
+- `[~]` in progress
+- `[ ]` not started
 
-1. Implement minimal simulation kernel in Rust:
-   - ECS-like data layout or SoA storage for cache locality.
-   - Deterministic tick loop with fixed seed handling.
-2. Define minimal agent rule set:
-   - Few core states and transitions only.
-3. Add scalable execution architecture:
-   - Partitioned agent updates.
-   - Parallel processing with clear synchronization boundaries.
-4. Build high-throughput I/O strategy:
-   - Buffered logging.
-   - Sparse checkpointing.
-   - Columnar-friendly output where useful.
-5. Add observability and profiling hooks:
-   - Tick time breakdown.
-   - Memory usage snapshots.
-   - Hotspot tracing.
-6. Build correctness tests early:
-   - Invariant/property tests.
-   - Determinism regression tests.
-7. Run scale trials:
-   - 10k, 100k, 1M agents (or staged targets).
-   - Document bottlenecks and optimize.
-8. Establish MVP acceptance gate:
-   - Meets performance baseline.
-   - Produces plausible macro dynamics.
+## Completed
 
-## 3. Add Necessary Variables
+1. `[x]` Core research architecture documented:
+   - seasonal time model
+   - hex travel friction
+   - carrying capacity streams
+   - water/fuel/labor constraints
+   - conflict/trade/fission frameworks
+2. `[x]` Validation framework documented:
+   - generative sufficiency
+   - pattern-oriented modeling
+   - sensitivity and knockout strategy
+3. `[x]` Rust base framework implemented:
+   - modular crate layout (`model`, `engine`, `mvp`, `output`, `utils`, `versioning`)
+   - deterministic seasonal tick pipeline
+   - multi-hazard composite stress hook
+4. `[x]` Date-time run versioning implemented:
+   - UTC run id and code version in state metadata
+5. `[x]` Simulated-data MVP runner implemented:
+   - synthetic initialization
+   - seasonal simulation loop
+6. `[x]` Minimal cultural output path implemented:
+   - `settlement_trait_frequency` collection
+   - CSV writer + tests
+7. `[x]` Configuration system for scenarios and parameters implemented:
+   - file-based TOML loading
+   - config validation
+   - SHA-256 config hash for run metadata
+8. `[x]` Synthetic climate generator implemented:
+   - deterministic seeded regional PDSI forcing
+   - cyclical variability + AR(1) interannual noise
+   - multi-year shock events (drought-like pulses)
+9. `[x]` Seed-tax storage logic implemented:
+   - configurable `sigma_seed` and spoilage in scenario config
+   - desperation seed draw branch
+   - emergency reciprocity flag when residual shortfall persists
+10. `[x]` Threat-defensibility caloric trap implemented:
+   - regional threat index from drought/conflict/food stress
+   - defensibility-linked burden multiplier
+   - burden applied to survival/subsistence labor and caloric requirement
+11. `[x]` Cultural transmission update implemented:
+   - neutral drift + conformist + prestige pull at settlement level
+   - deterministic jitter and bounded per-tick trait-step control
+   - trait counts clamped to household bounds
 
-1. Prioritize variable additions by marginal explanatory value.
-2. Add variables in small batches with feature flags.
-3. For each variable batch:
-   - Implement state representation.
-   - Implement transition effects.
-   - Add unit and invariance tests.
-   - Add metrics to assess impact.
-4. Recalibrate after each batch:
-   - Keep baseline comparability.
-   - Track fit improvement vs complexity increase.
-5. Control model complexity:
-   - Remove redundant variables/rules.
-   - Avoid overfitting to one historical episode.
-6. Maintain schema/versioning for saved runs.
-7. Update model documentation continuously:
-   - Assumptions.
-   - New equations/rules.
-   - Expected emergent behavior.
+## In Progress (Current MVP Build)
 
-## 4. Parameter Sweeps
+1. `[~]` Replace placeholder subsystem math in engine with configured equations:
+   - storage with seed reserve
+   - settlement stress terms
+   - threat-defensibility cost coupling
+2. `[~]` Keep outputs minimal-by-default:
+   - trait-frequency as standard run artifact
+   - optional validation outputs gated by config
 
-1. Define experiment matrix:
-   - Core parameters.
-   - Bounds/priors.
-   - Resolution strategy (grid, Latin hypercube, Bayesian search).
-2. Build reproducible experiment runner:
-   - Seed policy.
-   - Run metadata and config hashes.
-3. Parallelize sweeps safely:
-   - Multi-process or distributed workers.
-   - Isolate runs and deterministic replay.
-4. Implement result storage and indexing:
-   - Structured outputs with run IDs.
-   - Fast post-hoc aggregation.
-5. Define analysis metrics:
-   - Fit-to-history metrics.
-   - Stability/sensitivity metrics.
-   - Runtime/cost metrics.
-6. Identify robust parameter regions:
-   - Not single-point best fits.
-   - Stability under perturbation.
-7. Validate out-of-sample scenarios.
-8. Package findings:
-   - Ranked candidate parameter sets.
-   - Confidence intervals and caveats.
+## Next (Highest Priority)
 
-## Cross-Cutting Best Practices
+1. `[ ]` Add optional validation outputs:
+   - deposited trait accumulator table
+   - network edge snapshot ledger
 
-1. Keep simulation core deterministic and side-effect disciplined.
-2. Prefer data-oriented design and minimize allocations in hot loops.
-3. Use profiling-guided optimization only after correctness.
-4. Separate model logic, execution engine, and analysis pipeline.
-5. Use strict reproducibility:
-   - Versioned configs.
-   - Fixed seeds.
-   - Environment capture.
-6. Treat validation as continuous, not end-stage.
-7. Automate CI checks for performance regressions and deterministic drift.
+## Next After That
+
+1. `[ ]` Build experiment runner for sweeps:
+   - batch runs
+   - seed policies
+   - summary metric outputs
+2. `[ ]` Add mechanism toggle system for knockout experiments.
+3. `[ ]` Add baseline metric pack:
+   - population trend
+   - aggregation/abandonment counts
+   - network structure metrics
+
+## MVP Acceptance Gate
+
+MVP is done when all are true:
+
+1. `[ ]` Simulated-data runs complete reproducibly from config.
+2. `[ ]` Core mechanisms run without placeholder math for:
+   - food/storage
+   - water/fuel/labor stress
+   - migration/fission pressure
+   - cultural trait dynamics
+3. `[ ]` Trait-frequency CSV output is stable and analysis-ready.
+4. `[ ]` At least one 1,000-year synthetic run completes at target scale without crash.
+5. `[ ]` At least one sensitivity mini-sweep and one knockout run complete.
+
+## Deferred Until Post-MVP
+
+1. `[ ]` GIS ingestion pipeline and high-res-to-hex aggregation.
+2. `[ ]` Archaeological empirical calibration datasets.
+3. `[ ]` Distributed execution and large sweep orchestration.
+4. `[ ]` Rich GUI exploration and interactive scenario controls.
+
+## Working Rule
+
+- Default to synthetic-data-first, reproducible runs until MVP acceptance gate is met, then expand to GIS and empirical calibration.

@@ -1,0 +1,54 @@
+scenario_id = "synthetic-baseline"
+
+[mvp]
+ticks = 40
+snapshot_every_ticks = 4
+settlement_count = 25
+base_population = 120
+seed = 42
+
+[mvp.climate]
+pdsi_min = -6.0
+pdsi_max = 6.0
+ar1_phi = 0.65
+noise_std = 0.55
+cycle1_years = 18.0
+cycle1_amp = 1.1
+cycle2_years = 55.0
+cycle2_amp = 0.8
+shock_chance_per_year = 0.04
+shock_mean = -1.8
+shock_duration_years_min = 2
+shock_duration_years_max = 7
+
+[mvp.storage]
+sigma_seed = 0.12
+spoilage_rate = 0.05
+allow_seed_draw = true
+enable_emergency_reciprocity = true
+
+[mvp.threat]
+drought_weight = 0.5
+conflict_weight = 0.3
+food_weight = 0.2
+defensibility_cost_k = 0.8
+
+[mvp.culture]
+neutral_drift_rate = 0.02
+conformist_strength = 0.06
+prestige_rate = 0.08
+jitter_scale = 0.01
+max_trait_step_per_tick = 0.15
+
+[coupling.stress_weights]
+food = 0.30
+water = 0.25
+fuel = 0.15
+disease = 0.15
+conflict = 0.15
+
+[coupling.interaction_weights]
+drought_x_disease = 0.08
+drought_x_conflict = 0.08
+water_x_disease = 0.10
+fuel_x_labor = 0.06
