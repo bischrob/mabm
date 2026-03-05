@@ -203,6 +203,15 @@ pub struct SettlementState {
     pub deposited_trait_counts: [u64; MVP_TRAIT_COUNT],
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct TradeEdgeState {
+    pub source_settlement_id: u32,
+    pub target_settlement_id: u32,
+    pub weight: f32,
+    pub goods_exchanged_kcal: f32,
+    pub tick: u32,
+}
+
 #[derive(Clone, Debug)]
 pub struct SimulationState {
     pub tick: u32,
@@ -215,6 +224,7 @@ pub struct SimulationState {
     pub regional_threat_index: f32,
     pub simulation_seed: u64,
     pub settlements: HashMap<SettlementId, SettlementState>,
+    pub trade_edges: Vec<TradeEdgeState>,
 }
 
 impl Default for SimulationState {
@@ -230,6 +240,7 @@ impl Default for SimulationState {
             regional_threat_index: 0.0,
             simulation_seed: 0,
             settlements: HashMap::new(),
+            trade_edges: Vec::new(),
         }
     }
 }

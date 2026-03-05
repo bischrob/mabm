@@ -586,4 +586,108 @@ mod tests {
         assert!(after_a < before_a);
         assert!(after_b > before_b);
     }
+
+    #[test]
+    fn trade_network_transfers_calories_from_surplus_to_deficit() {
+        let mut sim = SimulationState::default();
+        sim.climate_forcing_pdsi = vec![0.0];
+
+        let mut shared_traits = [0_u32; crate::model::MVP_TRAIT_COUNT];
+        for t in &mut shared_traits {
+            *t = 10;
+        }
+
+        sim.settlements.insert(
+            1,
+            SettlementState {
+                id: 1,
+                population: 150,
+                households: 30,
+                food: FoodState {
+                    yield_kcal: 70_000_000.0,
+                    stores_kcal: 80_000_000.0,
+                    deficit_kcal: 0.0,
+                    ..FoodState::default()
+                },
+                water: WaterState {
+                    reliability: 1.0,
+                    quality: 1.0,
+                },
+                fuel: FuelState {
+                    high_wood: 1000.0,
+                    low_wood: 0.0,
+                    alt_fuel: 0.0,
+                },
+                labor: LaborState {
+                    seasonal_budget_hours: 5400.0,
+                    tier1_survival_hours: 900.0,
+                    tier2_subsistence_hours: 1200.0,
+                    tier3_maintenance_hours: 600.0,
+                    tier4_trade_hours: 2700.0,
+                },
+                trait_household_counts: shared_traits,
+                ..SettlementState::default()
+            },
+        );
+
+        sim.settlements.insert(
+            2,
+            SettlementState {
+                id: 2,
+                population: 150,
+                households: 30,
+                food: FoodState {
+                    yield_kcal: 1_000.0,
+                    stores_kcal: 0.0,
+                    deficit_kcal: 0.0,
+                    ..FoodState::default()
+                },
+                water: WaterState {
+                    reliability: 1.0,
+                    quality: 1.0,
+                },
+                fuel: FuelState {
+                    high_wood: 1000.0,
+                    low_wood: 0.0,
+                    alt_fuel: 0.0,
+                },
+                labor: LaborState {
+                    seasonal_budget_hours: 5400.0,
+                    tier1_survival_hours: 900.0,
+                    tier2_subsistence_hours: 1200.0,
+                    tier3_maintenance_hours: 600.0,
+                    tier4_trade_hours: 2700.0,
+                },
+                trait_household_counts: shared_traits,
+                ..SettlementState::default()
+            },
+        );
+
+        let receiver_before = sim
+            .settlements
+            .get(&2)
+            .expect("settlement 2 exists")
+            .food
+            .stores_kcal;
+
+        let engine = TickEngine::new(CouplingConfig::default());
+        engine.run_one_tick(&mut sim);
+
+        let donor_after = sim
+            .settlements
+            .get(&1)
+            .expect("settlement 1 exists")
+            .food
+            .stores_kcal;
+        let receiver_after = sim
+            .settlements
+            .get(&2)
+            .expect("settlement 2 exists")
+            .food
+            .stores_kcal;
+        assert!(receiver_after > receiver_before);
+        assert!(donor_after >= 0.0);
+        assert!(!sim.trade_edges.is_empty());
+        assert!(sim.trade_edges.iter().any(|e| e.goods_exchanged_kcal > 0.0));
+    }
 }

@@ -3,7 +3,7 @@ use std::path::Path;
 use rayon::prelude::*;
 use serde::Serialize;
 
-use crate::model::{SimulationState, MVP_TRAIT_COUNT};
+use crate::model::{SimulationState, TradeEdgeState, MVP_TRAIT_COUNT};
 
 /// This row exists to keep cultural-output logging minimal while preserving the
 /// core observable needed for trait convergence/divergence analysis.
@@ -118,39 +118,21 @@ pub fn collect_network_snapshot_rows(
     let year = state.tick as f32 / 4.0;
     let run_id = state.version.run_id.clone();
     let config_hash = state.version.config_hash.clone();
-    let settlements: Vec<_> = state.settlements.values().collect();
-
-    (0..settlements.len())
-        .into_par_iter()
-        .map(|i| {
-            let mut local = Vec::new();
-            for j in (i + 1)..settlements.len() {
-                let a = settlements[i];
-                let b = settlements[j];
-
-                let sim = jaccard_similarity(&a.trait_household_counts, &b.trait_household_counts);
-                let stress_gap = (a.stress_composite - b.stress_composite).abs();
-                let weight = (sim * (1.0 - 0.5 * stress_gap)).clamp(0.0, 1.0);
-                if weight < min_weight {
-                    continue;
-                }
-
-                let goods = weight * a.food.stores_kcal.min(b.food.stores_kcal) * 0.02;
-                local.push(NetworkInteractionSnapshotRow {
-                    run_id: run_id.clone(),
-                    config_hash: config_hash.clone(),
-                    tick: state.tick,
-                    year,
-                    source_settlement_id: a.id,
-                    target_settlement_id: b.id,
-                    edge_type: "trade_proxy".to_string(),
-                    weight,
-                    goods_exchanged_kcal: goods.max(0.0),
-                });
-            }
-            local
+    state
+        .trade_edges
+        .par_iter()
+        .filter(|e| e.weight >= min_weight)
+        .map(|e: &TradeEdgeState| NetworkInteractionSnapshotRow {
+            run_id: run_id.clone(),
+            config_hash: config_hash.clone(),
+            tick: state.tick,
+            year,
+            source_settlement_id: e.source_settlement_id,
+            target_settlement_id: e.target_settlement_id,
+            edge_type: "trade".to_string(),
+            weight: e.weight,
+            goods_exchanged_kcal: e.goods_exchanged_kcal.max(0.0),
         })
-        .flatten()
         .collect()
 }
 
@@ -195,20 +177,4 @@ pub fn write_network_snapshot_csv<P: AsRef<Path>>(
         writer.serialize(row)?;
     }
     writer.flush().map_err(csv::Error::from)
-}
-
-fn jaccard_similarity(a: &[u32; MVP_TRAIT_COUNT], b: &[u32; MVP_TRAIT_COUNT]) -> f32 {
-    let mut inter = 0.0_f32;
-    let mut union = 0.0_f32;
-    for i in 0..MVP_TRAIT_COUNT {
-        let ai = if a[i] > 0 { 1.0 } else { 0.0 };
-        let bi = if b[i] > 0 { 1.0 } else { 0.0 };
-        inter += ai * bi;
-        union += (ai + bi - ai * bi).max(0.0);
-    }
-    if union <= 0.0 {
-        0.0
-    } else {
-        inter / union
-    }
 }

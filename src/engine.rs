@@ -392,8 +392,104 @@ impl TickEngine {
         }
     }
 
-    fn update_trade_network(&self, _state: &mut SimulationState, _season: Season) {
-        // Placeholder: tie decay/formation and route-loss update.
+    fn update_trade_network(&self, state: &mut SimulationState, _season: Season) {
+        let snapshot: Vec<_> = state
+            .settlements
+            .values()
+            .map(|s| {
+                (
+                    s.id,
+                    s.population,
+                    s.households,
+                    s.stress_composite,
+                    s.food.stores_kcal,
+                    s.food.deficit_kcal,
+                    s.labor.tier4_trade_hours,
+                    s.trait_household_counts,
+                )
+            })
+            .collect();
+
+        let mut prev_weights = HashMap::new();
+        for e in &state.trade_edges {
+            let key = ordered_pair(e.source_settlement_id, e.target_settlement_id);
+            prev_weights.insert(key, e.weight);
+        }
+
+        let mut food_delta: HashMap<u32, f32> = HashMap::new();
+        let mut deficit_relief: HashMap<u32, f32> = HashMap::new();
+        let mut edges = Vec::new();
+
+        for i in 0..snapshot.len() {
+            for j in (i + 1)..snapshot.len() {
+                let a = &snapshot[i];
+                let b = &snapshot[j];
+                if a.0 == b.0 || a.1 == 0 || b.1 == 0 {
+                    continue;
+                }
+
+                let sim = jaccard_similarity(&a.7, &b.7);
+                let stress_gap = (a.3 - b.3).abs();
+                let labor_scale_a = (a.6 / (a.2.max(1) as f32 * 20.0)).clamp(0.0, 1.0);
+                let labor_scale_b = (b.6 / (b.2.max(1) as f32 * 20.0)).clamp(0.0, 1.0);
+                let labor_scale = labor_scale_a.min(labor_scale_b);
+                let raw_weight =
+                    (sim * (1.0 - 0.5 * stress_gap) * (0.4 + 0.6 * labor_scale)).clamp(0.0, 1.0);
+
+                let key = ordered_pair(a.0, b.0);
+                let prior = *prev_weights.get(&key).unwrap_or(&0.0);
+                let weight = if prior > 0.0 {
+                    (0.85 * prior + 0.15 * raw_weight).clamp(0.0, 1.0)
+                } else {
+                    raw_weight
+                };
+                if weight < 0.12 {
+                    continue;
+                }
+
+                let (donor, receiver) = if a.5 + 1.0e-6 < b.5 {
+                    (a, b)
+                } else if b.5 + 1.0e-6 < a.5 {
+                    (b, a)
+                } else if a.3 <= b.3 {
+                    (a, b)
+                } else {
+                    (b, a)
+                };
+
+                let donor_buffer = donor.1 as f32 * 2500.0 * 30.0;
+                let donor_surplus = (donor.4 - donor_buffer).max(0.0);
+                let receiver_need = receiver.5.max(0.0);
+                let transfer_cap = (donor.4 * 0.03 * weight).max(0.0);
+                let transfer = donor_surplus.min(receiver_need).min(transfer_cap);
+
+                if transfer > 0.0 {
+                    *food_delta.entry(donor.0).or_insert(0.0) -= transfer;
+                    *food_delta.entry(receiver.0).or_insert(0.0) += transfer;
+                    *deficit_relief.entry(receiver.0).or_insert(0.0) += transfer;
+                }
+
+                edges.push(crate::model::TradeEdgeState {
+                    source_settlement_id: donor.0,
+                    target_settlement_id: receiver.0,
+                    weight,
+                    goods_exchanged_kcal: transfer,
+                    tick: state.tick,
+                });
+            }
+        }
+
+        for (sid, delta) in food_delta {
+            if let Some(s) = state.settlements.get_mut(&sid) {
+                s.food.stores_kcal = (s.food.stores_kcal + delta).max(0.0);
+            }
+        }
+        for (sid, relief) in deficit_relief {
+            if let Some(s) = state.settlements.get_mut(&sid) {
+                s.food.deficit_kcal = (s.food.deficit_kcal - relief).max(0.0);
+            }
+        }
+        state.trade_edges = edges;
     }
 
     fn update_demography(&self, state: &mut SimulationState, season: Season) {
@@ -508,6 +604,30 @@ fn deterministic_signed_noise(seed: u64, tick: u32, settlement_id: u32, trait_id
     x ^= x >> 33;
     let u = (x as f64 / u64::MAX as f64) as f32;
     (u * 2.0) - 1.0
+}
+
+fn ordered_pair(a: u32, b: u32) -> (u32, u32) {
+    if a <= b {
+        (a, b)
+    } else {
+        (b, a)
+    }
+}
+
+fn jaccard_similarity(a: &[u32; MVP_TRAIT_COUNT], b: &[u32; MVP_TRAIT_COUNT]) -> f32 {
+    let mut inter = 0.0_f32;
+    let mut union = 0.0_f32;
+    for i in 0..MVP_TRAIT_COUNT {
+        let ai = if a[i] > 0 { 1.0 } else { 0.0 };
+        let bi = if b[i] > 0 { 1.0 } else { 0.0 };
+        inter += ai * bi;
+        union += (ai + bi - ai * bi).max(0.0);
+    }
+    if union <= 0.0 {
+        0.0
+    } else {
+        inter / union
+    }
 }
 
 fn refresh_households_and_labor(settlement: &mut SettlementState) {

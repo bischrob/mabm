@@ -82,6 +82,10 @@ Goal:
    - deterministic push-pull relocation under stress gradients
    - catastrophic abandonment trigger for small high-stress settlements
    - destination pull by stress/water/burden suitability
+19. `[x]` Trade network subsystem implemented:
+   - dynamic tie strength from similarity, stress gap, and trade labor
+   - deterministic surplus-to-deficit caloric transfer
+   - persistent edge ledger used by network outputs/metrics
 
 ## In Progress (Current MVP Build)
 
@@ -107,12 +111,13 @@ Goal:
 MVP is done when all are true:
 
 1. `[ ]` Simulated-data runs complete reproducibly from config.
-2. `[~]` Core mechanisms run without placeholder math for:
+2. `[x]` Core mechanisms run without placeholder math for:
    - food/storage `[x]`
    - water/fuel/labor stress `[x]`
    - migration/fission pressure `[x]`
    - cultural trait dynamics `[x]`
    - demography births/deaths `[x]`
+   - trade network dynamics `[x]`
 3. `[ ]` Trait-frequency CSV output is stable and analysis-ready.
 4. `[ ]` At least one 1,000-year synthetic run completes at target scale without crash.
 5. `[ ]` At least one sensitivity mini-sweep and one knockout run complete.
@@ -127,5 +132,6 @@ MVP is done when all are true:
 ## Working Rule
 
 - Default to synthetic-data-first, reproducible runs until MVP acceptance gate is met, then expand to GIS and empirical calibration.
+
 
 
