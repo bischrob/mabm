@@ -1,7 +1,7 @@
 scenario_id = "synthetic-sweep"
 
 [mvp]
-ticks = 16
+ticks = 400
 snapshot_every_ticks = 4
 settlement_count = 12
 base_population = 100
