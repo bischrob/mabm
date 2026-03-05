@@ -98,6 +98,16 @@ aggregation = 2.0
 network_density = 0.20
 stress = 0.20
 
+[sweep.fit_scoring.calibration]
+enabled = true
+target_quantile = 0.50
+low_quantile = 0.20
+high_quantile = 0.80
+min_population_scale = 50.0
+min_aggregation_scale = 0.5
+min_network_density_scale = 0.05
+min_stress_scale = 0.05
+
 [sweep.seed_policy]
 type = "incremental"
 start = 2000

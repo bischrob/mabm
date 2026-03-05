@@ -121,6 +121,10 @@ pub struct SweepSummaryRow {
     pub fit_error_aggregation: f32,
     pub fit_error_network_density: f32,
     pub fit_error_stress: f32,
+    pub observed_population_total: f32,
+    pub observed_aggregation_count: f32,
+    pub observed_network_density: f32,
+    pub observed_mean_stress: f32,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -132,6 +136,8 @@ pub struct FitScoringConfig {
     pub weights: FitWeights,
     #[serde(default)]
     pub scales: FitScales,
+    #[serde(default)]
+    pub calibration: FitCalibrationConfig,
 }
 
 impl Default for FitScoringConfig {
@@ -141,6 +147,34 @@ impl Default for FitScoringConfig {
             targets: FitTargetProfile::default(),
             weights: FitWeights::default(),
             scales: FitScales::default(),
+            calibration: FitCalibrationConfig::default(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct FitCalibrationConfig {
+    pub enabled: bool,
+    pub target_quantile: f32,
+    pub low_quantile: f32,
+    pub high_quantile: f32,
+    pub min_population_scale: f32,
+    pub min_aggregation_scale: f32,
+    pub min_network_density_scale: f32,
+    pub min_stress_scale: f32,
+}
+
+impl Default for FitCalibrationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            target_quantile: 0.50,
+            low_quantile: 0.20,
+            high_quantile: 0.80,
+            min_population_scale: 50.0,
+            min_aggregation_scale: 0.5,
+            min_network_density_scale: 0.05,
+            min_stress_scale: 0.05,
         }
     }
 }
@@ -333,9 +367,17 @@ fn run_sweep_job(cfg: &AppConfig, sweep: &SweepConfig, job: SweepRunJob) -> Swee
         fit_error_aggregation,
         fit_error_network_density,
         fit_error_stress,
+        observed_population_total,
+        observed_aggregation_count,
+        observed_network_density,
+        observed_mean_stress,
     ) = if sweep.fit_scoring.enabled {
         let maybe_last = result.baseline_metric_rows.last();
         if let Some(last) = maybe_last {
+            let obs_pop = last.population_total as f32;
+            let obs_agg = last.aggregation_count as f32;
+            let obs_density = last.network_density;
+            let obs_stress = mean_stress_composite;
             let errors = compute_fit_errors(
                 sweep.fit_scoring.targets.population_total,
                 sweep.fit_scoring.targets.aggregation_count,
@@ -345,10 +387,10 @@ fn run_sweep_job(cfg: &AppConfig, sweep: &SweepConfig, job: SweepRunJob) -> Swee
                 sweep.fit_scoring.scales.aggregation,
                 sweep.fit_scoring.scales.network_density,
                 sweep.fit_scoring.scales.stress,
-                last.population_total as f32,
-                last.aggregation_count as f32,
-                last.network_density,
-                mean_stress_composite,
+                obs_pop,
+                obs_agg,
+                obs_density,
+                obs_stress,
             );
             let score = 1.0
                 - weighted_error(
@@ -364,12 +406,31 @@ fn run_sweep_job(cfg: &AppConfig, sweep: &SweepConfig, job: SweepRunJob) -> Swee
                 errors.1,
                 errors.2,
                 errors.3,
+                obs_pop,
+                obs_agg,
+                obs_density,
+                obs_stress,
             )
         } else {
-            (0.0, 1.0, 1.0, 1.0, 1.0)
+            (0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0)
         }
     } else {
-        (0.0, 0.0, 0.0, 0.0, 0.0)
+        let maybe_last = result.baseline_metric_rows.last();
+        if let Some(last) = maybe_last {
+            (
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                last.population_total as f32,
+                last.aggregation_count as f32,
+                last.network_density,
+                mean_stress_composite,
+            )
+        } else {
+            (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        }
     };
 
     SweepSummaryRow {
@@ -391,6 +452,10 @@ fn run_sweep_job(cfg: &AppConfig, sweep: &SweepConfig, job: SweepRunJob) -> Swee
         fit_error_aggregation,
         fit_error_network_density,
         fit_error_stress,
+        observed_population_total,
+        observed_aggregation_count,
+        observed_network_density,
+        observed_mean_stress,
     }
 }
 
@@ -458,6 +523,138 @@ pub fn write_sweep_summary_csv<P: AsRef<std::path::Path>>(
         writer.serialize(row)?;
     }
     writer.flush().map_err(csv::Error::from)
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct FitCalibrationRecommendationRow {
+    pub scenario_id: String,
+    pub run_count: usize,
+    pub target_quantile: f32,
+    pub low_quantile: f32,
+    pub high_quantile: f32,
+    pub suggested_target_population_total: f32,
+    pub suggested_target_aggregation_count: f32,
+    pub suggested_target_network_density: f32,
+    pub suggested_target_mean_stress: f32,
+    pub suggested_scale_population: f32,
+    pub suggested_scale_aggregation: f32,
+    pub suggested_scale_network_density: f32,
+    pub suggested_scale_stress: f32,
+    pub observed_population_min: f32,
+    pub observed_population_max: f32,
+    pub observed_aggregation_min: f32,
+    pub observed_aggregation_max: f32,
+    pub observed_density_min: f32,
+    pub observed_density_max: f32,
+    pub observed_stress_min: f32,
+    pub observed_stress_max: f32,
+}
+
+pub fn build_fit_calibration_recommendation(
+    scenario_id: &str,
+    rows: &[SweepSummaryRow],
+    cfg: &FitCalibrationConfig,
+) -> Option<FitCalibrationRecommendationRow> {
+    if rows.is_empty() {
+        return None;
+    }
+
+    let mut pops: Vec<f32> = rows.iter().map(|r| r.observed_population_total).collect();
+    let mut aggs: Vec<f32> = rows.iter().map(|r| r.observed_aggregation_count).collect();
+    let mut dens: Vec<f32> = rows.iter().map(|r| r.observed_network_density).collect();
+    let mut strs: Vec<f32> = rows.iter().map(|r| r.observed_mean_stress).collect();
+
+    let pop_t = quantile_mut(&mut pops, cfg.target_quantile);
+    let agg_t = quantile_mut(&mut aggs, cfg.target_quantile);
+    let den_t = quantile_mut(&mut dens, cfg.target_quantile);
+    let str_t = quantile_mut(&mut strs, cfg.target_quantile);
+
+    let pop_l = quantile_mut(&mut pops, cfg.low_quantile);
+    let pop_h = quantile_mut(&mut pops, cfg.high_quantile);
+    let agg_l = quantile_mut(&mut aggs, cfg.low_quantile);
+    let agg_h = quantile_mut(&mut aggs, cfg.high_quantile);
+    let den_l = quantile_mut(&mut dens, cfg.low_quantile);
+    let den_h = quantile_mut(&mut dens, cfg.high_quantile);
+    let str_l = quantile_mut(&mut strs, cfg.low_quantile);
+    let str_h = quantile_mut(&mut strs, cfg.high_quantile);
+
+    let pop_min = rows
+        .iter()
+        .map(|r| r.observed_population_total)
+        .fold(f32::INFINITY, f32::min);
+    let pop_max = rows
+        .iter()
+        .map(|r| r.observed_population_total)
+        .fold(f32::NEG_INFINITY, f32::max);
+    let agg_min = rows
+        .iter()
+        .map(|r| r.observed_aggregation_count)
+        .fold(f32::INFINITY, f32::min);
+    let agg_max = rows
+        .iter()
+        .map(|r| r.observed_aggregation_count)
+        .fold(f32::NEG_INFINITY, f32::max);
+    let den_min = rows
+        .iter()
+        .map(|r| r.observed_network_density)
+        .fold(f32::INFINITY, f32::min);
+    let den_max = rows
+        .iter()
+        .map(|r| r.observed_network_density)
+        .fold(f32::NEG_INFINITY, f32::max);
+    let str_min = rows
+        .iter()
+        .map(|r| r.observed_mean_stress)
+        .fold(f32::INFINITY, f32::min);
+    let str_max = rows
+        .iter()
+        .map(|r| r.observed_mean_stress)
+        .fold(f32::NEG_INFINITY, f32::max);
+
+    Some(FitCalibrationRecommendationRow {
+        scenario_id: scenario_id.to_string(),
+        run_count: rows.len(),
+        target_quantile: cfg.target_quantile,
+        low_quantile: cfg.low_quantile,
+        high_quantile: cfg.high_quantile,
+        suggested_target_population_total: pop_t,
+        suggested_target_aggregation_count: agg_t,
+        suggested_target_network_density: den_t,
+        suggested_target_mean_stress: str_t,
+        suggested_scale_population: ((pop_h - pop_l) * 0.5).max(cfg.min_population_scale),
+        suggested_scale_aggregation: ((agg_h - agg_l) * 0.5).max(cfg.min_aggregation_scale),
+        suggested_scale_network_density: ((den_h - den_l) * 0.5).max(cfg.min_network_density_scale),
+        suggested_scale_stress: ((str_h - str_l) * 0.5).max(cfg.min_stress_scale),
+        observed_population_min: pop_min,
+        observed_population_max: pop_max,
+        observed_aggregation_min: agg_min,
+        observed_aggregation_max: agg_max,
+        observed_density_min: den_min,
+        observed_density_max: den_max,
+        observed_stress_min: str_min,
+        observed_stress_max: str_max,
+    })
+}
+
+pub fn write_fit_calibration_csv<P: AsRef<std::path::Path>>(
+    path: P,
+    row: &FitCalibrationRecommendationRow,
+) -> Result<(), csv::Error> {
+    let mut writer = csv::WriterBuilder::new()
+        .has_headers(true)
+        .from_path(path)?;
+    writer.serialize(row)?;
+    writer.flush().map_err(csv::Error::from)
+}
+
+fn quantile_mut(values: &mut [f32], q: f32) -> f32 {
+    if values.is_empty() {
+        return 0.0;
+    }
+    values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let qq = q.clamp(0.0, 1.0);
+    let idx = (qq * (values.len() as f32 - 1.0)).round() as usize;
+    values[idx]
 }
 
 struct SeedIterator<'a> {

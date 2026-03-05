@@ -27,7 +27,9 @@ pub use output::{
     NetworkInteractionSnapshotRow, SettlementTraitDepositionRow, SettlementTraitFrequencyRow,
 };
 pub use sweep::{
-    run_sweep, write_sweep_summary_csv, KnockoutMode, SeedPolicy, SweepConfig, SweepSummaryRow,
+    build_fit_calibration_recommendation, run_sweep, write_fit_calibration_csv,
+    write_sweep_summary_csv, FitCalibrationConfig, FitCalibrationRecommendationRow, KnockoutMode,
+    SeedPolicy, SweepConfig, SweepSummaryRow,
 };
 pub use versioning::RunVersion;
 
@@ -689,5 +691,67 @@ mod tests {
         assert!(donor_after >= 0.0);
         assert!(!sim.trade_edges.is_empty());
         assert!(sim.trade_edges.iter().any(|e| e.goods_exchanged_kcal > 0.0));
+    }
+
+    #[test]
+    fn fit_calibration_recommendation_builds_from_rows() {
+        let rows = vec![
+            crate::SweepSummaryRow {
+                scenario_id: "x".to_string(),
+                run_index: 0,
+                seed: 1,
+                knockout: "none".to_string(),
+                sigma_seed: 0.1,
+                defensibility_cost_k: 0.4,
+                prestige_rate: 0.05,
+                final_population_total: 100,
+                mean_stress_composite: 0.2,
+                settlement_count: 3,
+                trait_rows: 0,
+                deposition_rows: 0,
+                network_rows: 0,
+                fit_score: 0.0,
+                fit_error_population: 0.0,
+                fit_error_aggregation: 0.0,
+                fit_error_network_density: 0.0,
+                fit_error_stress: 0.0,
+                observed_population_total: 100.0,
+                observed_aggregation_count: 1.0,
+                observed_network_density: 0.2,
+                observed_mean_stress: 0.3,
+            },
+            crate::SweepSummaryRow {
+                scenario_id: "x".to_string(),
+                run_index: 1,
+                seed: 2,
+                knockout: "none".to_string(),
+                sigma_seed: 0.2,
+                defensibility_cost_k: 0.8,
+                prestige_rate: 0.08,
+                final_population_total: 200,
+                mean_stress_composite: 0.4,
+                settlement_count: 4,
+                trait_rows: 0,
+                deposition_rows: 0,
+                network_rows: 0,
+                fit_score: 0.0,
+                fit_error_population: 0.0,
+                fit_error_aggregation: 0.0,
+                fit_error_network_density: 0.0,
+                fit_error_stress: 0.0,
+                observed_population_total: 300.0,
+                observed_aggregation_count: 2.0,
+                observed_network_density: 0.6,
+                observed_mean_stress: 0.5,
+            },
+        ];
+
+        let cfg = crate::FitCalibrationConfig::default();
+        let rec = crate::build_fit_calibration_recommendation("x", &rows, &cfg)
+            .expect("recommendation should exist");
+        assert_eq!(rec.run_count, 2);
+        assert!(rec.suggested_target_population_total >= 100.0);
+        assert!(rec.suggested_target_population_total <= 300.0);
+        assert!(rec.suggested_scale_population >= cfg.min_population_scale);
     }
 }

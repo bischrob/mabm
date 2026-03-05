@@ -215,6 +215,32 @@ pub fn validate_config(cfg: &AppConfig) -> Result<(), ConfigError> {
                     ));
                 }
             }
+            if sweep.fit_scoring.calibration.enabled {
+                let c = &sweep.fit_scoring.calibration;
+                if !(0.0..=1.0).contains(&c.target_quantile)
+                    || !(0.0..=1.0).contains(&c.low_quantile)
+                    || !(0.0..=1.0).contains(&c.high_quantile)
+                {
+                    return Err(ConfigError::Validation(
+                        "sweep.fit_scoring.calibration quantiles must be within [0.0, 1.0]"
+                            .to_string(),
+                    ));
+                }
+                if !(c.low_quantile <= c.target_quantile && c.target_quantile <= c.high_quantile) {
+                    return Err(ConfigError::Validation(
+                        "sweep.fit_scoring.calibration requires low <= target <= high".to_string(),
+                    ));
+                }
+                if c.min_population_scale <= 0.0
+                    || c.min_aggregation_scale <= 0.0
+                    || c.min_network_density_scale <= 0.0
+                    || c.min_stress_scale <= 0.0
+                {
+                    return Err(ConfigError::Validation(
+                        "sweep.fit_scoring.calibration min scales must be > 0.0".to_string(),
+                    ));
+                }
+            }
         }
     }
     Ok(())

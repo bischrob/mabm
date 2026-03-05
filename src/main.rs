@@ -82,6 +82,22 @@ fn main() {
                 rows.len(),
                 sweep_path.display()
             );
+
+            if sweep_cfg.fit_scoring.calibration.enabled {
+                if let Some(rec) = mabm::build_fit_calibration_recommendation(
+                    &cfg.scenario_id,
+                    &rows,
+                    &sweep_cfg.fit_scoring.calibration,
+                ) {
+                    let rec_path = out_dir.join(format!(
+                        "{}_{}_fit_calibration.csv",
+                        cfg.scenario_id, result.final_state.version.run_id
+                    ));
+                    mabm::write_fit_calibration_csv(&rec_path, &rec)
+                        .expect("write fit calibration");
+                    println!("fit calibration: file={}", rec_path.display());
+                }
+            }
         }
     }
 }

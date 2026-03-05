@@ -86,6 +86,10 @@ Goal:
    - dynamic tie strength from similarity, stress gap, and trade labor
    - deterministic surplus-to-deficit caloric transfer
    - persistent edge ledger used by network outputs/metrics
+20. `[x]` Fit target calibration mode implemented:
+   - quantile-based target/scale recommendation from sweep outputs
+   - calibration config block with robust scale floors
+   - per-sweep `fit_calibration.csv` artifact
 
 ## In Progress (Current MVP Build)
 
