@@ -66,6 +66,76 @@ app.get("/api/configs", async (_req, res) => {
   }
 });
 
+app.post("/api/configs/save", async (req, res) => {
+  try {
+    const baseConfigPath = String(req.body?.baseConfigPath ?? "").trim();
+    const saveAs = String(req.body?.saveAs ?? "").trim();
+    const updates = req.body?.updates ?? {};
+
+    if (!baseConfigPath.startsWith("configs/") || !baseConfigPath.endsWith(".toml")) {
+      res.status(400).json({ error: "baseConfigPath must be a configs/*.toml path" });
+      return;
+    }
+    if (!saveAs) {
+      res.status(400).json({ error: "saveAs is required" });
+      return;
+    }
+
+    const targetName = normalizeTomlFileName(saveAs);
+    const targetRelPath = path.posix.join("configs", targetName);
+    const baseAbs = path.join(repoRoot, baseConfigPath);
+    const targetAbs = path.join(repoRoot, targetRelPath);
+    const rawBase = await fs.readFile(baseAbs, "utf-8");
+
+    let raw = rawBase;
+    raw = replaceTopLevelString(raw, "scenario_id", String(updates.scenario_id ?? "").trim());
+    raw = replaceTableNumber(raw, "mvp", "ticks", toIntOrNull(updates.ticks));
+    raw = replaceTableNumber(
+      raw,
+      "mvp",
+      "settlement_count",
+      toIntOrNull(updates.settlement_count)
+    );
+    raw = replaceTableNumber(raw, "mvp", "base_population", toIntOrNull(updates.base_population));
+    raw = replaceTableNumber(raw, "mvp", "seed", toIntOrNull(updates.seed));
+    raw = replaceTableNumber(
+      raw,
+      "mvp.gui",
+      "live_update_every_ticks",
+      toIntOrNull(updates.live_update_every_ticks)
+    );
+    raw = replaceTableNumber(
+      raw,
+      "mvp.spatial",
+      "hex_diameter_km",
+      toFloatOrNull(updates.hex_diameter_km)
+    );
+    raw = replaceTableNumber(
+      raw,
+      "mvp.spatial",
+      "flat_travel_km_per_day",
+      toFloatOrNull(updates.flat_travel_km_per_day)
+    );
+    raw = replaceTableBool(
+      raw,
+      "mvp.spatial",
+      "use_gis_hex_inputs",
+      toBoolOrNull(updates.use_gis_hex_inputs)
+    );
+    raw = replaceTableString(
+      raw,
+      "mvp.spatial",
+      "gis_hex_csv_path",
+      toStringOrNull(updates.gis_hex_csv_path)
+    );
+
+    await fs.writeFile(targetAbs, raw, "utf-8");
+    res.json({ ok: true, path: targetRelPath });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 app.get("/api/runs/:runId", async (req, res) => {
   try {
     const raw = await fs.readFile(runIndexPath, "utf-8");
@@ -263,7 +333,9 @@ function splitCsvLine(line) {
 
 function parseConfigMetadata(raw, relPath, rootDir) {
   const scenarioId = firstGroup(raw, /^scenario_id\s*=\s*"([^"]+)"/m) ?? "";
+  const mvp = parseTableBody(raw, "mvp");
   const spatial = parseTableBody(raw, "mvp.spatial");
+  const gui = parseTableBody(raw, "mvp.gui");
   const guiLoad = parseTableBody(raw, "gui_load");
   const useGisHexInputs = parseTomlBool(spatial, "use_gis_hex_inputs") ?? false;
   const gisHexCsvPath = parseTomlString(spatial, "gis_hex_csv_path");
@@ -284,6 +356,19 @@ function parseConfigMetadata(raw, relPath, rootDir) {
     return { path: p, exists: fileExistsSync(abs) };
   });
 
+  const run_defaults = {
+    scenario_id: scenarioId,
+    ticks: parseTomlNumber(mvp, "ticks") ?? 0,
+    settlement_count: parseTomlNumber(mvp, "settlement_count") ?? 0,
+    base_population: parseTomlNumber(mvp, "base_population") ?? 0,
+    seed: parseTomlNumber(mvp, "seed") ?? 0,
+    hex_diameter_km: parseTomlNumber(spatial, "hex_diameter_km") ?? 0,
+    flat_travel_km_per_day: parseTomlNumber(spatial, "flat_travel_km_per_day") ?? 0,
+    live_update_every_ticks: parseTomlNumber(gui, "live_update_every_ticks") ?? 0,
+    use_gis_hex_inputs: useGisHexInputs,
+    gis_hex_csv_path: gisHexCsvPath ?? ""
+  };
+
   return {
     path: relPath,
     scenario_id: scenarioId,
@@ -294,7 +379,8 @@ function parseConfigMetadata(raw, relPath, rootDir) {
       description,
       default: isDefault,
       required_files
-    }
+    },
+    run_defaults
   };
 }
 
@@ -321,6 +407,14 @@ function parseTomlBool(sectionBody, key) {
   return m[1].toLowerCase() === "true";
 }
 
+function parseTomlNumber(sectionBody, key) {
+  const re = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*(-?\\d+(?:\\.\\d+)?)\\s*$`, "m");
+  const m = sectionBody.match(re);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
 function parseTomlStringArray(sectionBody, key) {
   const re = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*\\[(.*)\\]\\s*$`, "m");
   const m = sectionBody.match(re);
@@ -345,6 +439,83 @@ function firstGroup(raw, re) {
 
 function fileExistsSync(p) {
   return existsSync(p);
+}
+
+function normalizeTomlFileName(name) {
+  const base = name.toLowerCase().endsWith(".toml") ? name.slice(0, -5) : name;
+  const safe = base.replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_+|_+$/g, "");
+  return `${safe || "config_custom"}.toml`;
+}
+
+function toIntOrNull(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return Math.floor(n);
+}
+
+function toFloatOrNull(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return n;
+}
+
+function toBoolOrNull(v) {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") {
+    if (v.toLowerCase() === "true") return true;
+    if (v.toLowerCase() === "false") return false;
+  }
+  return null;
+}
+
+function toStringOrNull(v) {
+  if (v === undefined || v === null) return null;
+  const s = String(v).trim();
+  return s.length > 0 ? s : null;
+}
+
+function replaceTopLevelString(raw, key, value) {
+  if (!value) return raw;
+  const re = new RegExp(`^${escapeRegExp(key)}\\s*=\\s*"[^"]*"\\s*$`, "m");
+  const line = `${key} = "${escapeTomlString(value)}"`;
+  return re.test(raw) ? raw.replace(re, line) : `${line}\n${raw}`;
+}
+
+function replaceTableString(raw, table, key, value) {
+  if (value === null) return raw;
+  return replaceTableValue(raw, table, key, `"${escapeTomlString(value)}"`);
+}
+
+function replaceTableBool(raw, table, key, value) {
+  if (value === null) return raw;
+  return replaceTableValue(raw, table, key, value ? "true" : "false");
+}
+
+function replaceTableNumber(raw, table, key, value) {
+  if (value === null) return raw;
+  const rendered = Number.isInteger(value) ? String(value) : String(value);
+  return replaceTableValue(raw, table, key, rendered);
+}
+
+function replaceTableValue(raw, table, key, valueLiteral) {
+  const body = parseTableBody(raw, table);
+  const headerRe = new RegExp(`^\\[${escapeRegExp(table)}\\]\\s*\\r?\\n`, "m");
+  if (!headerRe.test(raw)) {
+    return `${raw}\n[${table}]\n${key} = ${valueLiteral}\n`;
+  }
+  const keyRe = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*.*$`, "m");
+  const nextBody = keyRe.test(body)
+    ? body.replace(keyRe, `${key} = ${valueLiteral}`)
+    : `${body}${body.endsWith("\n") ? "" : "\n"}${key} = ${valueLiteral}\n`;
+  const tableRe = new RegExp(
+    `(^\\[${escapeRegExp(table)}\\]\\s*\\r?\\n)([\\s\\S]*?)(?=^\\[[^\\]]+\\]\\s*$|(?![\\s\\S]))`,
+    "m"
+  );
+  return raw.replace(tableRe, `$1${nextBody}`);
+}
+
+function escapeTomlString(s) {
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
 function aggregatePopulationFromSettlements(settlementRows) {

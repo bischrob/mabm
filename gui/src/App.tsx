@@ -132,11 +132,30 @@ type ConfigCatalogEntry = {
     default?: boolean;
     required_files?: ConfigRequirementFile[];
   };
+  run_defaults?: ConfigRunDefaults;
+};
+
+type ConfigRunDefaults = {
+  scenario_id: string;
+  ticks: number;
+  settlement_count: number;
+  base_population: number;
+  seed: number;
+  hex_diameter_km: number;
+  flat_travel_km_per_day: number;
+  live_update_every_ticks: number;
+  use_gis_hex_inputs: boolean;
+  gis_hex_csv_path: string;
 };
 
 type ConfigCatalogResponse = {
   default_path: string;
   configs: ConfigCatalogEntry[];
+};
+
+type ConfigSaveResponse = {
+  ok: boolean;
+  path: string;
 };
 
 export function App() {
@@ -154,6 +173,20 @@ export function App() {
   const [visuals, setVisuals] = useState<VisualPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hexMetricKey, setHexMetricKey] = useState<HexMetricKey>("hex_quality");
+  const [saveAsName, setSaveAsName] = useState("phoenix_basin_custom.toml");
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [editor, setEditor] = useState<ConfigRunDefaults>({
+    scenario_id: "phoenix-basin-gis",
+    ticks: 800,
+    settlement_count: 10,
+    base_population: 100,
+    seed: 42,
+    hex_diameter_km: 1.0,
+    flat_travel_km_per_day: 36.0,
+    live_update_every_ticks: 10,
+    use_gis_hex_inputs: true,
+    gis_hex_csv_path: "input/phoenix_basin_hex_attributes.csv"
+  });
 
   useEffect(() => {
     refreshConfigs();
@@ -211,6 +244,24 @@ export function App() {
     }, 1000);
     return () => clearInterval(timer);
   }, [running]);
+
+  useEffect(() => {
+    const selected = configCatalog.find((c) => c.path === configPath) ?? null;
+    if (!selected?.run_defaults) return;
+    const d = selected.run_defaults;
+    setEditor({
+      scenario_id: d.scenario_id || "custom-scenario",
+      ticks: d.ticks || 0,
+      settlement_count: d.settlement_count || 0,
+      base_population: d.base_population || 0,
+      seed: d.seed || 1,
+      hex_diameter_km: d.hex_diameter_km || 1.0,
+      flat_travel_km_per_day: d.flat_travel_km_per_day || 1.0,
+      live_update_every_ticks: d.live_update_every_ticks || 0,
+      use_gis_hex_inputs: !!d.use_gis_hex_inputs,
+      gis_hex_csv_path: d.gis_hex_csv_path || ""
+    });
+  }, [configCatalog, configPath]);
 
   const entries = useMemo(() => index?.entries ?? [], [index]);
   const selectedConfigMeta = useMemo(
@@ -304,6 +355,32 @@ export function App() {
       setError(String(e));
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function saveEditedConfig() {
+    setSavingConfig(true);
+    try {
+      const res = await fetch("/api/configs/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          baseConfigPath: configPath,
+          saveAs: saveAsName,
+          updates: editor
+        })
+      });
+      const body: ConfigSaveResponse & { error?: string } = await res.json();
+      if (!res.ok || !body.ok) {
+        throw new Error(body.error ?? "Failed to save config");
+      }
+      await refreshConfigs();
+      setConfigPath(body.path);
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSavingConfig(false);
     }
   }
 
@@ -407,6 +484,154 @@ export function App() {
       {error ? <div className="error">{error}</div> : null}
 
       <main className="grid">
+        <section className="panel full">
+          <h2>Config Editor</h2>
+          <div className="editor-grid">
+            <label>
+              Save As:
+              <input
+                value={saveAsName}
+                onChange={(e) => setSaveAsName(e.target.value)}
+                className="cfg"
+              />
+            </label>
+            <label>
+              Scenario ID:
+              <input
+                value={editor.scenario_id}
+                onChange={(e) =>
+                  setEditor((prev) => ({ ...prev, scenario_id: e.target.value }))
+                }
+                className="cfg"
+              />
+            </label>
+            <label>
+              Ticks:
+              <input
+                type="number"
+                min={1}
+                value={editor.ticks}
+                onChange={(e) =>
+                  setEditor((prev) => ({ ...prev, ticks: Number(e.target.value || 0) }))
+                }
+                className="small"
+              />
+            </label>
+            <label>
+              Settlement count:
+              <input
+                type="number"
+                min={1}
+                value={editor.settlement_count}
+                onChange={(e) =>
+                  setEditor((prev) => ({
+                    ...prev,
+                    settlement_count: Number(e.target.value || 0)
+                  }))
+                }
+                className="small"
+              />
+            </label>
+            <label>
+              Base population:
+              <input
+                type="number"
+                min={1}
+                value={editor.base_population}
+                onChange={(e) =>
+                  setEditor((prev) => ({ ...prev, base_population: Number(e.target.value || 0) }))
+                }
+                className="small"
+              />
+            </label>
+            <label>
+              Seed:
+              <input
+                type="number"
+                min={1}
+                value={editor.seed}
+                onChange={(e) =>
+                  setEditor((prev) => ({ ...prev, seed: Number(e.target.value || 1) }))
+                }
+                className="small"
+              />
+            </label>
+            <label>
+              Hex diameter (km):
+              <input
+                type="number"
+                min={0.01}
+                step={0.01}
+                value={editor.hex_diameter_km}
+                onChange={(e) =>
+                  setEditor((prev) => ({
+                    ...prev,
+                    hex_diameter_km: Number(e.target.value || 0)
+                  }))
+                }
+                className="small"
+              />
+            </label>
+            <label>
+              Flat travel (km/day):
+              <input
+                type="number"
+                min={0.01}
+                step={0.01}
+                value={editor.flat_travel_km_per_day}
+                onChange={(e) =>
+                  setEditor((prev) => ({
+                    ...prev,
+                    flat_travel_km_per_day: Number(e.target.value || 0)
+                  }))
+                }
+                className="small"
+              />
+            </label>
+            <label>
+              Live update ticks:
+              <input
+                type="number"
+                min={0}
+                value={editor.live_update_every_ticks}
+                onChange={(e) =>
+                  setEditor((prev) => ({
+                    ...prev,
+                    live_update_every_ticks: Number(e.target.value || 0)
+                  }))
+                }
+                className="small"
+              />
+            </label>
+            <label>
+              GIS hex CSV:
+              <input
+                value={editor.gis_hex_csv_path}
+                onChange={(e) =>
+                  setEditor((prev) => ({ ...prev, gis_hex_csv_path: e.target.value }))
+                }
+                className="cfg"
+              />
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={editor.use_gis_hex_inputs}
+                onChange={(e) =>
+                  setEditor((prev) => ({
+                    ...prev,
+                    use_gis_hex_inputs: e.target.checked
+                  }))
+                }
+              />
+              Use GIS hex inputs
+            </label>
+            <button onClick={saveEditedConfig} disabled={savingConfig}>
+              {savingConfig ? "Saving..." : "Save Config"}
+            </button>
+          </div>
+        </section>
+
         <section className="panel">
           <h2>Settlement Hex Grid</h2>
           <label>

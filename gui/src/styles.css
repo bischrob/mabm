@@ -206,6 +206,13 @@ pre {
   color: var(--vp-c-text-2);
 }
 
+.editor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  align-items: center;
+}
+
 @media (max-width: 900px) {
   .grid {
     grid-template-columns: 1fr;
