@@ -42,6 +42,7 @@ fn main() {
                         "food_stores_kcal": r.food_stores_kcal,
                         "food_deficit_kcal": r.food_deficit_kcal,
                         "food_capacity_persons": r.food_capacity_persons,
+                        "hex_quality": r.hex_quality,
                         "stress_composite": r.stress_composite,
                         "defensibility": r.defensibility,
                         "burden_multiplier": r.burden_multiplier,

@@ -100,6 +100,7 @@ app.get("/api/runs/:runId/visuals", async (req, res) => {
         food_stores_kcal: Number(r.food_stores_kcal ?? 0),
         food_deficit_kcal: Number(r.food_deficit_kcal ?? 0),
         food_capacity_persons: Number(r.food_capacity_persons ?? 0),
+        hex_quality: Number(r.hex_quality ?? 0),
         stress_composite: Number(r.stress_composite ?? 0),
         defensibility: Number(r.defensibility ?? 0),
         burden_multiplier: Number(r.burden_multiplier ?? 0),

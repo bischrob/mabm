@@ -52,6 +52,7 @@ type VisualSettlement = {
   food_stores_kcal: number;
   food_deficit_kcal: number;
   food_capacity_persons: number;
+  hex_quality: number;
   stress_composite: number;
   defensibility: number;
   burden_multiplier: number;
@@ -61,6 +62,7 @@ type VisualSettlement = {
 };
 
 type HexMetricKey =
+  | "hex_quality"
   | "food_capacity_persons"
   | "population_total"
   | "households"
@@ -83,6 +85,7 @@ type MetricOption = {
 };
 
 const HEX_METRIC_OPTIONS: MetricOption[] = [
+  { key: "hex_quality", label: "Hex Quality" },
   { key: "food_capacity_persons", label: "Food Capacity (persons)" },
   { key: "population_total", label: "Population" },
   { key: "households", label: "Households" },
@@ -126,7 +129,7 @@ export function App() {
   const [runLog, setRunLog] = useState("");
   const [visuals, setVisuals] = useState<VisualPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [hexMetricKey, setHexMetricKey] = useState<HexMetricKey>("food_capacity_persons");
+  const [hexMetricKey, setHexMetricKey] = useState<HexMetricKey>("hex_quality");
 
   useEffect(() => {
     refreshIndex();
@@ -606,6 +609,7 @@ function buildInitialHexPlaceholders(count: number): VisualSettlement[] {
       food_stores_kcal: 0,
       food_deficit_kcal: 0,
       food_capacity_persons: 0,
+      hex_quality: 0,
       stress_composite: 0,
       defensibility: 0,
       burden_multiplier: 1,
@@ -738,6 +742,7 @@ function hexTooltipText(h: VisualSettlement): string {
     `Food yield: ${formatMetric(h.food_yield_kcal)} kcal`,
     `Food stores: ${formatMetric(h.food_stores_kcal)} kcal`,
     `Food deficit: ${formatMetric(h.food_deficit_kcal)} kcal`,
+    `Hex quality: ${h.hex_quality.toFixed(3)}`,
     `Water reliability: ${h.water_reliability.toFixed(3)}`,
     `Water quality: ${h.water_quality.toFixed(3)}`,
     `Fuel stock: ${formatMetric(h.fuel_stock)}`,

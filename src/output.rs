@@ -66,6 +66,7 @@ pub struct SettlementSnapshotRow {
     pub food_stores_kcal: f32,
     pub food_deficit_kcal: f32,
     pub food_capacity_persons: f32,
+    pub hex_quality: f32,
     pub stress_composite: f32,
     pub defensibility: f32,
     pub burden_multiplier: f32,
@@ -238,6 +239,19 @@ pub fn collect_settlement_snapshot_rows(state: &SimulationState) -> Vec<Settleme
                 0.0
             };
             let is_active = population_total > 0;
+            let hex_quality = compute_hex_quality(
+                state,
+                food_capacity_persons,
+                food_deficit_kcal,
+                population_total,
+                water_reliability / n,
+                water_quality / n,
+                fuel_stock,
+                stress_composite / n,
+                defensibility / n,
+                disease_infected_share,
+                drought_index_5y / n,
+            );
 
             rows.push(SettlementSnapshotRow {
                 run_id: run_id.clone(),
@@ -259,6 +273,7 @@ pub fn collect_settlement_snapshot_rows(state: &SimulationState) -> Vec<Settleme
                 food_stores_kcal,
                 food_deficit_kcal,
                 food_capacity_persons,
+                hex_quality,
                 stress_composite: stress_composite / n,
                 defensibility: defensibility / n,
                 burden_multiplier: burden_multiplier / n,
@@ -286,6 +301,19 @@ pub fn collect_settlement_snapshot_rows(state: &SimulationState) -> Vec<Settleme
                 food_yield_kcal,
                 food_stores_kcal,
             );
+            let hex_quality = compute_hex_quality(
+                state,
+                food_capacity_persons,
+                0.0,
+                0,
+                water_reliability,
+                water_quality,
+                fuel_stock,
+                0.0,
+                defensibility,
+                0.0,
+                drought_index_5y,
+            );
 
             rows.push(SettlementSnapshotRow {
                 run_id: run_id.clone(),
@@ -307,6 +335,7 @@ pub fn collect_settlement_snapshot_rows(state: &SimulationState) -> Vec<Settleme
                 food_stores_kcal,
                 food_deficit_kcal: 0.0,
                 food_capacity_persons,
+                hex_quality,
                 stress_composite: 0.0,
                 defensibility,
                 burden_multiplier: 1.0,
@@ -418,4 +447,48 @@ fn estimate_food_capacity_persons_from_hex(
         sp.min_population_capacity_per_hex.max(1.0),
         sp.population_capacity_per_hex.max(sp.min_population_capacity_per_hex.max(1.0)),
     )
+}
+
+fn compute_hex_quality(
+    state: &SimulationState,
+    food_capacity_persons: f32,
+    food_deficit_kcal: f32,
+    population_total: u32,
+    water_reliability: f32,
+    water_quality: f32,
+    fuel_stock: f32,
+    stress_composite: f32,
+    defensibility: f32,
+    disease_infected_share: f32,
+    drought_index_5y: f32,
+) -> f32 {
+    let food_norm = (food_capacity_persons
+        / state
+            .spatial_policy
+            .population_capacity_per_hex
+            .max(1.0))
+    .clamp(0.0, 1.0);
+    let water_norm = (0.5 * (water_reliability + water_quality)).clamp(0.0, 1.0);
+    let fuel_norm = (fuel_stock / 8_000.0).clamp(0.0, 1.0);
+    let defensibility_norm = defensibility.clamp(0.0, 1.0);
+    let drought_relief = (1.0 - drought_index_5y.clamp(0.0, 1.0)).clamp(0.0, 1.0);
+    let stress_relief = (1.0 - stress_composite.clamp(0.0, 1.0)).clamp(0.0, 1.0);
+    let disease_relief = (1.0 - disease_infected_share.clamp(0.0, 1.0)).clamp(0.0, 1.0);
+    let deficit_norm = if population_total > 0 {
+        let seasonal_need = (population_total as f32) * 2500.0 * 90.0;
+        (food_deficit_kcal.max(0.0) / seasonal_need.max(1.0)).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let deficit_relief = (1.0 - deficit_norm).clamp(0.0, 1.0);
+
+    (0.32 * food_norm
+        + 0.20 * water_norm
+        + 0.14 * fuel_norm
+        + 0.08 * defensibility_norm
+        + 0.08 * drought_relief
+        + 0.08 * deficit_relief
+        + 0.06 * stress_relief
+        + 0.04 * disease_relief)
+        .clamp(0.0, 1.0)
 }
