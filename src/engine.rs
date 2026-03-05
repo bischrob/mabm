@@ -150,8 +150,10 @@ impl TickEngine {
     fn update_labor_allocation(&self, state: &mut SimulationState, _season: Season) {
         for settlement in state.settlements.values_mut() {
             let total = settlement.labor.seasonal_budget_hours.max(0.0);
-            let tier1_req = settlement.labor.tier1_survival_hours.max(0.0) * settlement.burden_multiplier;
-            let tier2_req = settlement.labor.tier2_subsistence_hours.max(0.0) * settlement.burden_multiplier;
+            let tier1_req =
+                settlement.labor.tier1_survival_hours.max(0.0) * settlement.burden_multiplier;
+            let tier2_req =
+                settlement.labor.tier2_subsistence_hours.max(0.0) * settlement.burden_multiplier;
 
             let tier1 = tier1_req.min(total);
             let rem1 = (total - tier1).max(0.0);
@@ -175,7 +177,8 @@ impl TickEngine {
             settlement.food.stores_kcal =
                 (settlement.food.stores_kcal * (1.0 - policy.spoilage_rate)).max(0.0);
 
-            let gross_yield = settlement.food.yield_kcal * settlement.food.next_yield_multiplier.max(0.0);
+            let gross_yield =
+                settlement.food.yield_kcal * settlement.food.next_yield_multiplier.max(0.0);
             settlement.food.seed_reserve_kcal = if seed_tax_enabled {
                 (gross_yield * policy.sigma_seed).max(0.0)
             } else {
@@ -184,7 +187,8 @@ impl TickEngine {
             let usable_yield = (gross_yield - settlement.food.seed_reserve_kcal).max(0.0);
 
             let available_without_seed = usable_yield + settlement.food.stores_kcal;
-            let required = (settlement.population as f32) * 2500.0 * 90.0 * settlement.burden_multiplier;
+            let required =
+                (settlement.population as f32) * 2500.0 * 90.0 * settlement.burden_multiplier;
 
             if available_without_seed >= required {
                 settlement.food.deficit_kcal = 0.0;
@@ -197,7 +201,8 @@ impl TickEngine {
             let mut available = available_without_seed;
             let mut shortfall = required - available_without_seed;
 
-            if seed_tax_enabled && policy.allow_seed_draw && settlement.food.seed_reserve_kcal > 0.0 {
+            if seed_tax_enabled && policy.allow_seed_draw && settlement.food.seed_reserve_kcal > 0.0
+            {
                 let seed_draw = shortfall.min(settlement.food.seed_reserve_kcal);
                 let consumed_seed_fraction = seed_draw / settlement.food.seed_reserve_kcal;
                 available += seed_draw;
@@ -205,9 +210,9 @@ impl TickEngine {
                 settlement.food.seed_drawn_last_tick = seed_draw > 0.0;
 
                 // Seed draw penalizes next cycle productive capacity.
-                settlement.food.next_yield_multiplier =
-                    (settlement.food.next_yield_multiplier * (1.0 - consumed_seed_fraction))
-                        .clamp(0.0, 1.0);
+                settlement.food.next_yield_multiplier = (settlement.food.next_yield_multiplier
+                    * (1.0 - consumed_seed_fraction))
+                    .clamp(0.0, 1.0);
             }
 
             if shortfall > 0.0 && policy.enable_emergency_reciprocity {
@@ -223,17 +228,19 @@ impl TickEngine {
         for settlement in state.settlements.values_mut() {
             // Water quality coupling exists because contaminated access pathways can
             // amplify disease dynamics even without global contact changes.
-            settlement.disease.beta_water_multiplier = if state.mechanism_toggles.water_quality_disease_coupling {
-                1.0 + (1.0 - settlement.water.quality) * 0.5
-            } else {
-                1.0
-            };
+            settlement.disease.beta_water_multiplier =
+                if state.mechanism_toggles.water_quality_disease_coupling {
+                    1.0 + (1.0 - settlement.water.quality) * 0.5
+                } else {
+                    1.0
+                };
         }
     }
 
     fn update_conflict(&self, state: &mut SimulationState, _season: Season) {
         for settlement in state.settlements.values_mut() {
-            let food_stress = normalized_deficit(settlement.food.deficit_kcal, settlement.population);
+            let food_stress =
+                normalized_deficit(settlement.food.deficit_kcal, settlement.population);
             settlement.conflict.retaliation_memory =
                 0.9 * settlement.conflict.retaliation_memory + 0.1 * food_stress;
         }
@@ -241,7 +248,8 @@ impl TickEngine {
 
     fn update_migration_fission_abandonment(&self, state: &mut SimulationState, _season: Season) {
         for settlement in state.settlements.values_mut() {
-            settlement.stress.food = normalized_deficit(settlement.food.deficit_kcal, settlement.population);
+            settlement.stress.food =
+                normalized_deficit(settlement.food.deficit_kcal, settlement.population);
             settlement.stress.water = 1.0 - settlement.water.reliability;
             settlement.stress.fuel = fuel_stress(settlement);
             settlement.stress.disease = infected_share(settlement);
@@ -268,7 +276,9 @@ impl TickEngine {
             let deficit = normalized_deficit(s.food.deficit_kcal, s.population);
             let stores_ratio = clamp01(s.food.stores_kcal / (h * 2500.0 * 90.0));
             let burden_penalty = clamp01((s.burden_multiplier - 1.0) / 2.0);
-            let prestige = clamp01(0.6 * stores_ratio + 0.25 * (1.0 - deficit) + 0.15 * (1.0 - burden_penalty));
+            let prestige = clamp01(
+                0.6 * stores_ratio + 0.25 * (1.0 - deficit) + 0.15 * (1.0 - burden_penalty),
+            );
 
             for (trait_id, c) in s.trait_household_counts.iter().enumerate() {
                 prestige_numer[trait_id] += prestige * (*c as f32 / h);
@@ -299,7 +309,11 @@ impl TickEngine {
                     );
 
                 let raw = f0 + drift + conformist + prestige_pull + jitter;
-                let bounded = f0 + (raw - f0).clamp(-policy.max_trait_step_per_tick, policy.max_trait_step_per_tick);
+                let bounded = f0
+                    + (raw - f0).clamp(
+                        -policy.max_trait_step_per_tick,
+                        policy.max_trait_step_per_tick,
+                    );
                 let f1 = clamp01(bounded);
                 let c1 = (f1 * h).round().clamp(0.0, h) as u32;
                 s.trait_household_counts[trait_id] = c1;

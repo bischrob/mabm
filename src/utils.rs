@@ -28,4 +28,3 @@ pub fn labor_crowding(s: &SettlementState) -> f32 {
     let essential = s.labor.tier1_survival_hours + s.labor.tier2_subsistence_hours;
     clamp01(essential / total)
 }
-

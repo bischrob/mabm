@@ -106,4 +106,3 @@ pub fn write_baseline_metrics_csv<P: AsRef<std::path::Path>>(
     }
     writer.flush().map_err(csv::Error::from)
 }
-

@@ -87,11 +87,12 @@ Goal:
 
 ## Next (Highest Priority)
 
-1. `[ ]` Add parallel sweep execution for large parameter grids.
+1. `[x]` Add parallel sweep execution for large parameter grids.
 
 ## Next After That
 
 1. `[ ]` Add richer pattern targets (time-series shapes, not endpoint-only).
+2. `[ ]` Refactor settlement storage from `HashMap` to cache-friendly vectors to enable safe in-tick parallel ECS updates.
 
 ## MVP Acceptance Gate
 

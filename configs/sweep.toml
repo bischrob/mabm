@@ -73,6 +73,8 @@ fuel_x_labor = 0.06
 [sweep]
 enabled = true
 snapshot_every = 1
+parallel_enabled = true
+max_parallel_workers = 8
 knockout_variants = ["none", "no_cultural_transmission", "no_threat_defensibility"]
 
 [sweep.fit_scoring]

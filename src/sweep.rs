@@ -1,3 +1,4 @@
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -9,6 +10,10 @@ use crate::{
 pub struct SweepConfig {
     pub enabled: bool,
     pub snapshot_every: u32,
+    #[serde(default = "default_parallel_enabled")]
+    pub parallel_enabled: bool,
+    #[serde(default)]
+    pub max_parallel_workers: Option<usize>,
     #[serde(default)]
     pub seed_policy: SeedPolicy,
     #[serde(default)]
@@ -24,6 +29,8 @@ impl Default for SweepConfig {
         Self {
             enabled: false,
             snapshot_every: 1,
+            parallel_enabled: default_parallel_enabled(),
+            max_parallel_workers: None,
             seed_policy: SeedPolicy::Incremental { start: 1000 },
             ranges: SweepRanges::default(),
             knockout_variants: default_knockout_variants(),
@@ -44,6 +51,10 @@ pub enum KnockoutMode {
 
 fn default_knockout_variants() -> Vec<KnockoutMode> {
     vec![KnockoutMode::None]
+}
+
+fn default_parallel_enabled() -> bool {
+    true
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -197,7 +208,7 @@ pub fn run_sweep(cfg: &AppConfig) -> Vec<SweepSummaryRow> {
         _ => return Vec::new(),
     };
 
-    let mut rows = Vec::new();
+    let mut jobs = Vec::new();
     let mut run_index = 0_u32;
     let mut seed_iter = SeedIterator::new(&sweep.seed_policy);
 
@@ -206,92 +217,14 @@ pub fn run_sweep(cfg: &AppConfig) -> Vec<SweepSummaryRow> {
             for prestige_rate in &sweep.ranges.prestige_rate_values {
                 for knockout in &sweep.knockout_variants {
                     let seed = seed_iter.next(run_index);
-                    let mut mvp: MvpRunConfig = cfg.mvp.clone();
-                    mvp.seed = seed;
-                    mvp.storage.sigma_seed = *sigma_seed;
-                    mvp.threat.defensibility_cost_k = *defensibility_cost_k;
-                    mvp.culture.prestige_rate = *prestige_rate;
-                    apply_knockout(&mut mvp, knockout);
-
-                    let result = run_mvp_simulation(&mvp, cfg.coupling, None);
-                    let settlement_count = result.final_state.settlements.len() as u32;
-                    let final_population_total = result
-                        .final_state
-                        .settlements
-                        .values()
-                        .map(|s| s.population as u64)
-                        .sum::<u64>();
-                    let mean_stress_composite = if settlement_count == 0 {
-                        0.0
-                    } else {
-                        result
-                            .final_state
-                            .settlements
-                            .values()
-                            .map(|s| s.stress_composite)
-                            .sum::<f32>()
-                            / settlement_count as f32
-                    };
-
-                    let (fit_score, fit_error_population, fit_error_aggregation, fit_error_network_density, fit_error_stress) =
-                        if sweep.fit_scoring.enabled {
-                            let maybe_last = result.baseline_metric_rows.last();
-                            if let Some(last) = maybe_last {
-                                let errors = compute_fit_errors(
-                                    sweep.fit_scoring.targets.population_total,
-                                    sweep.fit_scoring.targets.aggregation_count,
-                                    sweep.fit_scoring.targets.network_density,
-                                    sweep.fit_scoring.targets.mean_stress,
-                                    sweep.fit_scoring.scales.population,
-                                    sweep.fit_scoring.scales.aggregation,
-                                    sweep.fit_scoring.scales.network_density,
-                                    sweep.fit_scoring.scales.stress,
-                                    last.population_total as f32,
-                                    last.aggregation_count as f32,
-                                    last.network_density,
-                                    mean_stress_composite,
-                                );
-                                let score = 1.0
-                                    - weighted_error(
-                                        errors.0,
-                                        errors.1,
-                                        errors.2,
-                                        errors.3,
-                                        &sweep.fit_scoring.weights,
-                                    );
-                                (
-                                    score.clamp(0.0, 1.0),
-                                    errors.0,
-                                    errors.1,
-                                    errors.2,
-                                    errors.3,
-                                )
-                            } else {
-                                (0.0, 1.0, 1.0, 1.0, 1.0)
-                            }
-                        } else {
-                            (0.0, 0.0, 0.0, 0.0, 0.0)
-                        };
-
-                    rows.push(SweepSummaryRow {
+                    jobs.push(SweepRunJob {
                         scenario_id: cfg.scenario_id.clone(),
                         run_index,
                         seed,
-                        knockout: knockout_label(knockout).to_string(),
                         sigma_seed: *sigma_seed,
                         defensibility_cost_k: *defensibility_cost_k,
                         prestige_rate: *prestige_rate,
-                        final_population_total,
-                        mean_stress_composite,
-                        settlement_count,
-                        trait_rows: result.trait_rows.len(),
-                        deposition_rows: result.deposition_rows.len(),
-                        network_rows: result.network_rows.len(),
-                        fit_score,
-                        fit_error_population,
-                        fit_error_aggregation,
-                        fit_error_network_density,
-                        fit_error_stress,
+                        knockout: knockout.clone(),
                     });
                     run_index += 1;
                 }
@@ -299,11 +232,17 @@ pub fn run_sweep(cfg: &AppConfig) -> Vec<SweepSummaryRow> {
         }
     }
 
+    let mut rows = if sweep.parallel_enabled {
+        execute_parallel(cfg, sweep, jobs)
+    } else {
+        execute_serial(cfg, sweep, jobs)
+    };
+    rows.sort_by_key(|r| r.run_index);
+
     if sweep.snapshot_every > 1 {
         rows.into_iter()
-            .enumerate()
-            .filter_map(|(i, r)| {
-                if i as u32 % sweep.snapshot_every == 0 {
+            .filter_map(|r| {
+                if r.run_index % sweep.snapshot_every == 0 {
                     Some(r)
                 } else {
                     None
@@ -312,6 +251,146 @@ pub fn run_sweep(cfg: &AppConfig) -> Vec<SweepSummaryRow> {
             .collect()
     } else {
         rows
+    }
+}
+
+#[derive(Clone, Debug)]
+struct SweepRunJob {
+    scenario_id: String,
+    run_index: u32,
+    seed: u64,
+    sigma_seed: f32,
+    defensibility_cost_k: f32,
+    prestige_rate: f32,
+    knockout: KnockoutMode,
+}
+
+fn execute_serial(
+    cfg: &AppConfig,
+    sweep: &SweepConfig,
+    jobs: Vec<SweepRunJob>,
+) -> Vec<SweepSummaryRow> {
+    jobs.into_iter()
+        .map(|job| run_sweep_job(cfg, sweep, job))
+        .collect()
+}
+
+fn execute_parallel(
+    cfg: &AppConfig,
+    sweep: &SweepConfig,
+    jobs: Vec<SweepRunJob>,
+) -> Vec<SweepSummaryRow> {
+    match sweep.max_parallel_workers {
+        Some(n) if n > 0 => {
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(n)
+                .build()
+                .expect("build local sweep thread pool");
+            pool.install(|| {
+                jobs.into_par_iter()
+                    .map(|job| run_sweep_job(cfg, sweep, job))
+                    .collect()
+            })
+        }
+        _ => jobs
+            .into_par_iter()
+            .map(|job| run_sweep_job(cfg, sweep, job))
+            .collect(),
+    }
+}
+
+fn run_sweep_job(cfg: &AppConfig, sweep: &SweepConfig, job: SweepRunJob) -> SweepSummaryRow {
+    let mut mvp: MvpRunConfig = cfg.mvp.clone();
+    mvp.seed = job.seed;
+    mvp.storage.sigma_seed = job.sigma_seed;
+    mvp.threat.defensibility_cost_k = job.defensibility_cost_k;
+    mvp.culture.prestige_rate = job.prestige_rate;
+    apply_knockout(&mut mvp, &job.knockout);
+
+    let result = run_mvp_simulation(&mvp, cfg.coupling, None);
+    let settlement_count = result.final_state.settlements.len() as u32;
+    let final_population_total = result
+        .final_state
+        .settlements
+        .values()
+        .map(|s| s.population as u64)
+        .sum::<u64>();
+    let mean_stress_composite = if settlement_count == 0 {
+        0.0
+    } else {
+        result
+            .final_state
+            .settlements
+            .values()
+            .map(|s| s.stress_composite)
+            .sum::<f32>()
+            / settlement_count as f32
+    };
+
+    let (
+        fit_score,
+        fit_error_population,
+        fit_error_aggregation,
+        fit_error_network_density,
+        fit_error_stress,
+    ) = if sweep.fit_scoring.enabled {
+        let maybe_last = result.baseline_metric_rows.last();
+        if let Some(last) = maybe_last {
+            let errors = compute_fit_errors(
+                sweep.fit_scoring.targets.population_total,
+                sweep.fit_scoring.targets.aggregation_count,
+                sweep.fit_scoring.targets.network_density,
+                sweep.fit_scoring.targets.mean_stress,
+                sweep.fit_scoring.scales.population,
+                sweep.fit_scoring.scales.aggregation,
+                sweep.fit_scoring.scales.network_density,
+                sweep.fit_scoring.scales.stress,
+                last.population_total as f32,
+                last.aggregation_count as f32,
+                last.network_density,
+                mean_stress_composite,
+            );
+            let score = 1.0
+                - weighted_error(
+                    errors.0,
+                    errors.1,
+                    errors.2,
+                    errors.3,
+                    &sweep.fit_scoring.weights,
+                );
+            (
+                score.clamp(0.0, 1.0),
+                errors.0,
+                errors.1,
+                errors.2,
+                errors.3,
+            )
+        } else {
+            (0.0, 1.0, 1.0, 1.0, 1.0)
+        }
+    } else {
+        (0.0, 0.0, 0.0, 0.0, 0.0)
+    };
+
+    SweepSummaryRow {
+        scenario_id: job.scenario_id,
+        run_index: job.run_index,
+        seed: job.seed,
+        knockout: knockout_label(&job.knockout).to_string(),
+        sigma_seed: job.sigma_seed,
+        defensibility_cost_k: job.defensibility_cost_k,
+        prestige_rate: job.prestige_rate,
+        final_population_total,
+        mean_stress_composite,
+        settlement_count,
+        trait_rows: result.trait_rows.len(),
+        deposition_rows: result.deposition_rows.len(),
+        network_rows: result.network_rows.len(),
+        fit_score,
+        fit_error_population,
+        fit_error_aggregation,
+        fit_error_network_density,
+        fit_error_stress,
     }
 }
 
@@ -355,14 +434,16 @@ fn compute_fit_errors(
     let e_agg = ((obs_agg - target_agg).abs() / scale_agg.max(1e-6)).clamp(0.0, 1.0);
     let e_density =
         ((obs_density - target_density).abs() / scale_density.max(1e-6)).clamp(0.0, 1.0);
-    let e_stress =
-        ((obs_stress - target_stress).abs() / scale_stress.max(1e-6)).clamp(0.0, 1.0);
+    let e_stress = ((obs_stress - target_stress).abs() / scale_stress.max(1e-6)).clamp(0.0, 1.0);
     (e_pop, e_agg, e_density, e_stress)
 }
 
 fn weighted_error(e_pop: f32, e_agg: f32, e_density: f32, e_stress: f32, w: &FitWeights) -> f32 {
     let ws = (w.population + w.aggregation + w.network_density + w.stress).max(1e-6);
-    (w.population * e_pop + w.aggregation * e_agg + w.network_density * e_density + w.stress * e_stress)
+    (w.population * e_pop
+        + w.aggregation * e_agg
+        + w.network_density * e_density
+        + w.stress * e_stress)
         / ws
 }
 

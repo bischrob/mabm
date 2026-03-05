@@ -37,11 +37,7 @@ impl Default for SyntheticClimateConfig {
     }
 }
 
-pub fn generate_pdsi_series(
-    ticks: u32,
-    cfg: &SyntheticClimateConfig,
-    seed: u64,
-) -> Vec<f32> {
+pub fn generate_pdsi_series(ticks: u32, cfg: &SyntheticClimateConfig, seed: u64) -> Vec<f32> {
     let mut rng = Lcg::new(seed ^ 0x9E3779B97F4A7C15);
     let mut series = vec![0.0; ticks as usize];
 
@@ -49,7 +45,10 @@ pub fn generate_pdsi_series(
     let cycle2_ticks = (cfg.cycle2_years * 4.0).max(1.0);
     let shock_chance_per_tick = (cfg.shock_chance_per_year / 4.0).clamp(0.0, 1.0);
     let min_dur_ticks = (cfg.shock_duration_years_min.max(1) * 4) as i32;
-    let max_dur_ticks = (cfg.shock_duration_years_max.max(cfg.shock_duration_years_min) * 4) as i32;
+    let max_dur_ticks = (cfg
+        .shock_duration_years_max
+        .max(cfg.shock_duration_years_min)
+        * 4) as i32;
 
     let mut x = 0.0_f32;
     let mut active_shock = 0.0_f32;
@@ -107,4 +106,3 @@ impl Lcg {
         self.next_u32() as f32 / u32::MAX as f32
     }
 }
-

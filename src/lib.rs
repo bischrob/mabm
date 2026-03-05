@@ -5,22 +5,22 @@
 pub mod climate;
 pub mod config;
 pub mod engine;
+pub mod metrics;
 pub mod model;
 pub mod mvp;
 pub mod output;
 pub mod sweep;
-pub mod metrics;
 pub mod utils;
 pub mod versioning;
 
 pub use config::{load_config_with_hash, validate_config, AppConfig, ConfigError};
 pub use engine::{CouplingConfig, TickEngine};
+pub use metrics::{write_baseline_metrics_csv, BaselineMetricRow, MetricTracker};
 pub use model::{
     ClimateState, ConflictState, DiseaseState, FoodState, FuelState, LaborState, Season,
     SettlementState, SimulationState, WaterState,
 };
 pub use mvp::{build_synthetic_state, run_mvp_simulation, MvpRunConfig, MvpRunResult};
-pub use metrics::{write_baseline_metrics_csv, BaselineMetricRow, MetricTracker};
 pub use output::{
     collect_network_snapshot_rows, collect_trait_deposition_rows, collect_trait_frequency_rows,
     write_network_snapshot_csv, write_trait_deposition_csv, write_trait_frequency_csv,
@@ -340,6 +340,49 @@ mod tests {
         assert!(!result.baseline_metric_rows.is_empty());
         for r in &result.baseline_metric_rows {
             assert!((0.0..=1.0).contains(&r.network_density));
+        }
+    }
+
+    #[test]
+    fn parallel_and_serial_sweep_match() {
+        let mut app = crate::AppConfig::default();
+        app.mvp.ticks = 8;
+        app.mvp.snapshot_every_ticks = 4;
+        app.mvp.settlement_count = 5;
+        app.mvp.seed = 9;
+        app.sweep = Some(crate::SweepConfig {
+            enabled: true,
+            snapshot_every: 1,
+            parallel_enabled: false,
+            max_parallel_workers: None,
+            seed_policy: crate::SeedPolicy::Fixed { seed: 9 },
+            ranges: crate::sweep::SweepRanges {
+                sigma_seed_values: vec![0.1, 0.2],
+                defensibility_cost_values: vec![0.5],
+                prestige_rate_values: vec![0.03, 0.08],
+            },
+            knockout_variants: vec![crate::KnockoutMode::None],
+            ..crate::SweepConfig::default()
+        });
+
+        let serial_rows = crate::run_sweep(&app);
+        let mut app_parallel = app.clone();
+        if let Some(sweep) = app_parallel.sweep.as_mut() {
+            sweep.parallel_enabled = true;
+            sweep.max_parallel_workers = Some(2);
+        }
+        let parallel_rows = crate::run_sweep(&app_parallel);
+
+        assert_eq!(serial_rows.len(), parallel_rows.len());
+        for (a, b) in serial_rows.iter().zip(parallel_rows.iter()) {
+            assert_eq!(a.run_index, b.run_index);
+            assert_eq!(a.seed, b.seed);
+            assert_eq!(a.knockout, b.knockout);
+            assert_eq!(a.sigma_seed, b.sigma_seed);
+            assert_eq!(a.defensibility_cost_k, b.defensibility_cost_k);
+            assert_eq!(a.prestige_rate, b.prestige_rate);
+            assert_eq!(a.final_population_total, b.final_population_total);
+            assert!((a.fit_score - b.fit_score).abs() < 1e-6);
         }
     }
 }

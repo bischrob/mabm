@@ -199,7 +199,8 @@ pub fn build_synthetic_state(cfg: &MvpRunConfig) -> SimulationState {
     sim.mechanism_toggles.seed_tax_storage = cfg.mechanisms.seed_tax_storage;
     sim.mechanism_toggles.threat_defensibility = cfg.mechanisms.threat_defensibility;
     sim.mechanism_toggles.cultural_transmission = cfg.mechanisms.cultural_transmission;
-    sim.mechanism_toggles.water_quality_disease_coupling = cfg.mechanisms.water_quality_disease_coupling;
+    sim.mechanism_toggles.water_quality_disease_coupling =
+        cfg.mechanisms.water_quality_disease_coupling;
 
     for sid in 0..cfg.settlement_count {
         let population = cfg.base_population + (rng.next_u32() % 80);
@@ -281,7 +282,10 @@ pub fn run_mvp_simulation(
     for _ in 0..cfg.ticks {
         engine.run_one_tick(&mut state);
         if cfg.validation_outputs.enable_trait_deposition {
-            accumulate_trait_deposition(&mut state, cfg.validation_outputs.deposition_rate_per_tick);
+            accumulate_trait_deposition(
+                &mut state,
+                cfg.validation_outputs.deposition_rate_per_tick,
+            );
         }
         if state.tick % cfg.snapshot_every_ticks == 0 {
             trait_rows.extend(collect_trait_frequency_rows(&state));
