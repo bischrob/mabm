@@ -68,10 +68,13 @@ app.get("/api/runs/:runId/visuals", async (req, res) => {
       ? await readCsvAsObjects(path.join(outputsDir, manifest.files.settlement_snapshot_csv))
       : [];
 
-    const populationSeries = popSeries.map((r) => ({
+    const baselinePopulationSeries = popSeries.map((r) => ({
       year: Number(r.year ?? 0),
       population_total: Number(r.population_total ?? 0)
     }));
+    const fallbackPopulationSeries = aggregatePopulationFromSettlements(settlementRows);
+    const populationSeries =
+      baselinePopulationSeries.length >= 2 ? baselinePopulationSeries : fallbackPopulationSeries;
 
     const latestTick = settlementRows.reduce(
       (acc, r) => Math.max(acc, Number(r.tick ?? 0)),
@@ -102,7 +105,7 @@ app.get("/api/runs/:runId/visuals", async (req, res) => {
 });
 
 app.post("/api/run", async (req, res) => {
-  const configPath = req.body?.configPath ?? "configs/sweep.toml";
+  const configPath = req.body?.configPath ?? "configs/sweep_long_transition.toml";
   const ticksOverride = Number(req.body?.ticksOverride ?? 0);
   const liveUpdateEveryTicks = Number(req.body?.liveUpdateEveryTicks ?? 0);
   let runConfigPath = configPath;
@@ -205,6 +208,25 @@ function splitCsvLine(line) {
   }
   out.push(cur);
   return out;
+}
+
+function aggregatePopulationFromSettlements(settlementRows) {
+  const byTick = new Map();
+  for (const r of settlementRows) {
+    const tick = Number(r.tick ?? 0);
+    const year = Number(r.year ?? 0);
+    const pop = Number(r.population_total ?? 0);
+    const cur = byTick.get(tick);
+    if (!cur) {
+      byTick.set(tick, { year, population_total: pop });
+    } else {
+      cur.population_total += pop;
+      if (year > cur.year) cur.year = year;
+    }
+  }
+  return [...byTick.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, v]) => v);
 }
 
 const port = Number(process.env.MABM_GUI_API_PORT ?? 8787);

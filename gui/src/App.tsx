@@ -60,7 +60,7 @@ export function App() {
   const [index, setIndex] = useState<RunIndex | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedManifest, setSelectedManifest] = useState<RunManifest | null>(null);
-  const [configPath, setConfigPath] = useState("configs/sweep.toml");
+  const [configPath, setConfigPath] = useState("configs/sweep_long_transition.toml");
   const [ticksOverride, setTicksOverride] = useState(0);
   const [liveUpdateEveryTicks, setLiveUpdateEveryTicks] = useState(10);
   const [running, setRunning] = useState(false);
@@ -201,6 +201,16 @@ export function App() {
 
       <main className="grid">
         <section className="panel">
+          <h2>Settlement Hex Grid</h2>
+          <HexGridMap settlements={visuals?.settlements_latest ?? []} />
+        </section>
+
+        <section className="panel">
+          <h2>Population Time Series</h2>
+          <PopulationGraph points={visuals?.population_series ?? []} />
+        </section>
+
+        <section className="panel">
           <h2>Runs</h2>
           <table>
             <thead>
@@ -243,16 +253,6 @@ export function App() {
           ) : (
             <div>Select a run.</div>
           )}
-        </section>
-
-        <section className="panel">
-      <h2>Settlement Hex Grid</h2>
-          <HexGridMap settlements={visuals?.settlements_latest ?? []} />
-        </section>
-
-        <section className="panel">
-          <h2>Population Time Series</h2>
-          <PopulationGraph points={visuals?.population_series ?? []} />
         </section>
 
         <section className="panel full">
@@ -318,8 +318,11 @@ function HexGridMap({ settlements }: { settlements: VisualSettlement[] }) {
 
 function PopulationGraph({ points }: { points: VisualPoint[] }) {
   const normalized = normalizeSeries(points);
-  if (normalized.length < 2) {
-    return <div>Not enough baseline metric points.</div>;
+  if (normalized.length === 0) {
+    return <div>No population points available yet.</div>;
+  }
+  if (normalized.length === 1) {
+    return <div>Only one population point available so far. Run longer or lower GUI update interval.</div>;
   }
   const w = 540;
   const h = 220;

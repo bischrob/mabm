@@ -3,7 +3,7 @@ scenario_id = "synthetic-transition-long"
 [mvp]
 ticks = 2000
 snapshot_every_ticks = 20
-settlement_count = 90
+settlement_count = 270
 base_population = 20
 seed = 42
 

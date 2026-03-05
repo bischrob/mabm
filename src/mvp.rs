@@ -67,7 +67,7 @@ impl Default for MvpRunConfig {
         Self {
             ticks: 40, // 10 years at seasonal resolution
             snapshot_every_ticks: 4,
-            settlement_count: 25,
+            settlement_count: 75,
             base_population: 120,
             seed: 42,
             climate: SyntheticClimateConfig::default(),
