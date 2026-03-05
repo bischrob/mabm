@@ -147,7 +147,12 @@ export function App() {
 
     fetch(`/api/runs/${encodeURIComponent(selectedRunId)}/visuals`)
       .then((r) => r.json())
-      .then((v: VisualPayload) => setVisuals(v))
+      .then((v: VisualPayload) =>
+        setVisuals({
+          ...v,
+          settlements_latest: (v.settlements_latest ?? []).map(normalizeSettlement)
+        })
+      )
       .catch((e) => setError(String(e)));
   }, [selectedRunId]);
 
@@ -171,7 +176,7 @@ export function App() {
                 hex_count:
                   prev?.hex_count ?? inferHexCountFromSettlements(lp.settlements_latest ?? []),
                 latest_tick: Number(lp.tick ?? prev?.latest_tick ?? 0),
-                settlements_latest: lp.settlements_latest,
+                settlements_latest: (lp.settlements_latest ?? []).map(normalizeSettlement),
                 population_series: nextSeries
               };
             });
@@ -589,8 +594,9 @@ function buildInitialHexPlaceholders(count: number): VisualSettlement[] {
   const out: VisualSettlement[] = [];
   const cols = Math.ceil(Math.sqrt(count));
   for (let i = 0; i < count; i++) {
-    const q = i % cols;
+    const col = i % cols;
     const r = Math.floor(i / cols);
+    const q = col - Math.floor(r / 2);
     out.push({
       tick: 0,
       year: 0,
@@ -619,6 +625,40 @@ function buildInitialHexPlaceholders(count: number): VisualSettlement[] {
     });
   }
   return out;
+}
+
+function n(v: unknown): number {
+  const x = Number(v ?? 0);
+  return Number.isFinite(x) ? x : 0;
+}
+
+function normalizeSettlement(s: Partial<VisualSettlement> & Record<string, unknown>): VisualSettlement {
+  return {
+    tick: n(s.tick),
+    year: n(s.year),
+    settlement_id: n(s.settlement_id),
+    hex_id: n(s.hex_id),
+    grid_q: n(s.grid_q),
+    grid_r: n(s.grid_r),
+    population_total: n(s.population_total),
+    households: n(s.households),
+    climate_pdsi: n(s.climate_pdsi),
+    drought_index_5y: n(s.drought_index_5y),
+    water_reliability: n(s.water_reliability),
+    water_quality: n(s.water_quality),
+    fuel_stock: n(s.fuel_stock),
+    food_yield_kcal: n(s.food_yield_kcal),
+    food_stores_kcal: n(s.food_stores_kcal),
+    food_deficit_kcal: n(s.food_deficit_kcal),
+    food_capacity_persons: n(s.food_capacity_persons),
+    hex_quality: n(s.hex_quality),
+    stress_composite: n(s.stress_composite),
+    defensibility: n(s.defensibility),
+    burden_multiplier: n(s.burden_multiplier) || 1,
+    disease_infected_share: n(s.disease_infected_share),
+    is_active: Boolean(s.is_active),
+    status: String(s.status ?? "unknown")
+  };
 }
 
 function mergeHexSnapshots(
@@ -742,7 +782,7 @@ function hexTooltipText(h: VisualSettlement): string {
     `Food yield: ${formatMetric(h.food_yield_kcal)} kcal`,
     `Food stores: ${formatMetric(h.food_stores_kcal)} kcal`,
     `Food deficit: ${formatMetric(h.food_deficit_kcal)} kcal`,
-    `Hex quality: ${h.hex_quality.toFixed(3)}`,
+    `Hex quality: ${n(h.hex_quality).toFixed(3)}`,
     `Water reliability: ${h.water_reliability.toFixed(3)}`,
     `Water quality: ${h.water_quality.toFixed(3)}`,
     `Fuel stock: ${formatMetric(h.fuel_stock)}`,

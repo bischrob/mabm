@@ -322,20 +322,59 @@ pub fn build_synthetic_state(cfg: &MvpRunConfig) -> SimulationState {
 
     // Hex-level heterogeneity exists so empty space has explicit environmental
     // structure and can serve as meaningful migration/fission destinations.
+    // We intentionally model wide ecological spread so the landscape includes
+    // both near-unlivable and near-ideal hexes.
     for hid in 1..=hex_count {
+        let mut productivity = rng.next_f32_gaussian_clamped(0.55, 0.30, 0.0, 1.0);
+        let mut harshness = rng.next_f32_gaussian_clamped(0.45, 0.35, 0.0, 1.0);
+
+        // Force heavier tails so a non-trivial share of hexes become extremes.
+        if rng.next_f32() < 0.18 {
+            harshness = (harshness + 0.35).clamp(0.0, 1.0);
+            productivity = (productivity * 0.60).clamp(0.0, 1.0);
+        }
+        if rng.next_f32() < 0.15 {
+            productivity = (productivity + 0.35).clamp(0.0, 1.0);
+            harshness = (harshness * 0.60).clamp(0.0, 1.0);
+        }
+
+        let mut micro_noise = || rng.next_f32_gaussian_clamped(0.0, 0.08, -0.25, 0.25);
+
+        let water_reliability =
+            (0.10 + 0.80 * productivity - 0.55 * harshness + micro_noise()).clamp(0.02, 1.0);
+        let water_quality =
+            (0.12 + 0.75 * productivity - 0.45 * harshness + micro_noise()).clamp(0.02, 1.0);
+        let drought_index_5y =
+            (0.15 + 0.85 * harshness - 0.25 * productivity + micro_noise()).clamp(0.0, 1.0);
+
+        let food_suitability = (0.55 * productivity + 0.25 * water_reliability
+            - 0.30 * drought_index_5y
+            + micro_noise())
+        .clamp(0.0, 1.0);
+        let fuel_suitability =
+            (0.45 * productivity + 0.25 * water_reliability - 0.20 * harshness + micro_noise())
+                .clamp(0.0, 1.0);
+
+        let food_yield_kcal = lerp(2.0e6, 1.8e8, food_suitability)
+            * cfg.resources.yield_multiplier.max(0.0);
+        let food_store_factor = rng.next_f32_gaussian_clamped(0.28 + 0.45 * food_suitability, 0.20, 0.0, 0.95);
+        let food_stores_kcal =
+            (food_yield_kcal * food_store_factor) * cfg.resources.stores_multiplier.max(0.0);
+        let fuel_stock = lerp(50.0, 8_500.0, fuel_suitability);
+        let defensibility =
+            (rng.next_f32_gaussian_clamped(0.5, 0.33, 0.0, 1.0) + 0.25 * harshness).clamp(0.0, 1.0);
+
         let hex = HexState {
             id: hid,
-            climate_local_multiplier: rng.next_f32_gaussian_clamped(1.0, 0.10, 0.75, 1.25),
-            climate_local_offset: rng.next_f32_gaussian_clamped(0.0, 0.25, -0.8, 0.8),
-            drought_index_5y: rng.next_f32_gaussian_clamped(0.5, 0.20, 0.0, 1.0),
-            water_reliability: rng.next_f32_gaussian_clamped(0.65, 0.15, 0.10, 1.0),
-            water_quality: rng.next_f32_gaussian_clamped(0.70, 0.15, 0.10, 1.0),
-            fuel_stock: rng.next_f32_gaussian_clamped(3_750.0, 900.0, 100.0, 8_000.0),
-            food_yield_kcal: rng.next_f32_gaussian_clamped(4.5e7, 1.2e7, 5.0e6, 1.2e8)
-                * cfg.resources.yield_multiplier.max(0.0),
-            food_stores_kcal: rng.next_f32_gaussian_clamped(3.0e7, 1.0e7, 0.0, 8.0e7)
-                * cfg.resources.stores_multiplier.max(0.0),
-            defensibility: rng.next_f32_gaussian_clamped(0.5, 0.20, 0.0, 1.0),
+            climate_local_multiplier: rng.next_f32_gaussian_clamped(1.0 + 0.35 * (harshness - 0.5), 0.22, 0.55, 1.45),
+            climate_local_offset: rng.next_f32_gaussian_clamped((harshness - 0.5) * 1.0, 0.40, -1.3, 1.3),
+            drought_index_5y,
+            water_reliability,
+            water_quality,
+            fuel_stock,
+            food_yield_kcal,
+            food_stores_kcal,
+            defensibility,
         };
         sim.hexes.insert(hid, hex);
     }
@@ -549,4 +588,8 @@ impl Lcg {
         let z0 = (-2.0 * u1.ln()).sqrt() * (2.0 * std::f32::consts::PI * u2).cos();
         (mean + std_dev.max(0.0) * z0).clamp(min, max)
     }
+}
+
+fn lerp(min: f32, max: f32, t: f32) -> f32 {
+    min + (max - min) * t.clamp(0.0, 1.0)
 }

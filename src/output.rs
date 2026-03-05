@@ -408,8 +408,11 @@ pub fn write_settlement_snapshot_csv<P: AsRef<Path>>(
 fn grid_qr_from_hex_id(hex_id: u32, total_hexes: u32) -> (i32, i32) {
     let index = hex_id.saturating_sub(1) as usize;
     let cols = (total_hexes as f32).sqrt().ceil().max(1.0) as usize;
-    let q = (index % cols) as i32;
+    let col = (index % cols) as i32;
     let r = (index / cols) as i32;
+    // Shift q by row parity to keep rendered hex maps approximately square
+    // instead of diagonally drifting as rows increase.
+    let q = col - (r / 2);
     (q, r)
 }
 

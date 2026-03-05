@@ -304,14 +304,14 @@ impl TickEngine {
             let mut outflow = 0_u32;
 
             // Strong stress pushes households to relocate toward safer neighbors.
-            if *stress > 0.55 && *pop > 25 {
-                let frac = ((*stress - 0.55) * 0.20).clamp(0.0, 0.10);
+            if *stress > 0.40 && *pop > 20 {
+                let frac = ((*stress - 0.40) * 0.30).clamp(0.0, 0.16);
                 outflow = ((*pop as f32) * frac).round() as u32;
             }
 
             // Aggregation under stress can trigger fission into lower-pressure sites.
-            if *stress > 0.45 && *pop > 260 {
-                outflow = outflow.saturating_add(((*pop as f32) * 0.04).round() as u32);
+            if *stress > 0.32 && *pop > 90 {
+                outflow = outflow.saturating_add(((*pop as f32) * 0.06).round() as u32);
             }
 
             // Catastrophic abandonment when tiny settlements stay highly stressed.
@@ -330,32 +330,44 @@ impl TickEngine {
                 continue;
             }
 
-            if let Some(dest_id) = select_migration_destination(
+            let occupied_choice = select_migration_destination(
                 *sid,
                 *source_hex_id,
                 *stress,
                 &snapshot,
                 state.spatial_policy.hex_diameter_km,
                 state.spatial_policy.flat_travel_km_per_day,
-            ) {
+            );
+            let empty_choice =
+                select_empty_hex_destination(*source_hex_id, *stress, &occupied_hexes, state);
+
+            let prefer_empty = match (occupied_choice, empty_choice) {
+                (Some((_, occ_score)), Some((_, empty_score))) => {
+                    *stress > 0.42 || empty_score > occ_score + 0.05
+                }
+                (None, Some(_)) => true,
+                _ => false,
+            };
+
+            if prefer_empty {
+                if let Some((dest_hex_id, _)) = empty_choice {
+                    if let Some(source) = state.settlements.get(sid) {
+                        let founder = build_settlement_from_fission(
+                            source,
+                            next_settlement_id,
+                            dest_hex_id,
+                            out,
+                            state,
+                        );
+                        next_settlement_id = next_settlement_id.saturating_add(1);
+                        occupied_hexes.insert(dest_hex_id);
+                        *pop_delta.entry(*sid).or_insert(0) -= out as i32;
+                        new_settlements.push(founder);
+                    }
+                }
+            } else if let Some((dest_id, _)) = occupied_choice {
                 *pop_delta.entry(*sid).or_insert(0) -= out as i32;
                 *pop_delta.entry(dest_id).or_insert(0) += out as i32;
-            } else if let Some(dest_hex_id) =
-                select_empty_hex_destination(*source_hex_id, *stress, &occupied_hexes, state)
-            {
-                if let Some(source) = state.settlements.get(sid) {
-                    let founder = build_settlement_from_fission(
-                        source,
-                        next_settlement_id,
-                        dest_hex_id,
-                        out,
-                        state,
-                    );
-                    next_settlement_id = next_settlement_id.saturating_add(1);
-                    occupied_hexes.insert(dest_hex_id);
-                    *pop_delta.entry(*sid).or_insert(0) -= out as i32;
-                    new_settlements.push(founder);
-                }
             }
         }
 
@@ -727,7 +739,7 @@ fn select_migration_destination(
     snapshot: &[(u32, u32, u32, f32, f32, f32, f32)],
     hex_diameter_km: f32,
     flat_travel_km_per_day: f32,
-) -> Option<u32> {
+) -> Option<(u32, f32)> {
     let mut best: Option<(u32, f32)> = None;
     for (id, target_hex_id, pop, stress, water_rel, burden, target_defensibility) in snapshot {
         if *id == source_id {
@@ -762,7 +774,7 @@ fn select_migration_destination(
             best = Some((*id, suitability));
         }
     }
-    best.map(|(id, _)| id)
+    best
 }
 
 fn select_empty_hex_destination(
@@ -770,8 +782,8 @@ fn select_empty_hex_destination(
     source_stress: f32,
     occupied_hexes: &HashSet<u32>,
     state: &SimulationState,
-) -> Option<u32> {
-    if source_stress < 0.50 || state.hexes.is_empty() {
+) -> Option<(u32, f32)> {
+    if source_stress < 0.35 || state.hexes.is_empty() {
         return None;
     }
 
@@ -803,7 +815,7 @@ fn select_empty_hex_destination(
         }
     }
 
-    best.map(|(hid, _)| hid)
+    best
 }
 
 fn build_settlement_from_fission(
