@@ -1,9 +1,9 @@
 scenario_id = "synthetic-baseline"
 
 [mvp]
-ticks = 40
+ticks = 400
 snapshot_every_ticks = 4
-settlement_count = 25
+settlement_count = 20
 base_population = 120
 seed = 42
 

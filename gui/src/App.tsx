@@ -326,11 +326,18 @@ function PopulationGraph({ points }: { points: VisualPoint[] }) {
   const pad = 28;
   const minYear = Math.min(...points.map((p) => p.year));
   const maxYear = Math.max(...points.map((p) => p.year));
-  const minPop = 0;
-  const maxPop = Math.max(...points.map((p) => p.population_total), 1);
-  const sx = (x: number) => pad + ((x - minYear) / Math.max(1e-6, maxYear - minYear)) * (w - pad * 2);
-  const sy = (y: number) => h - pad - ((y - minPop) / Math.max(1e-6, maxPop - minPop)) * (h - pad * 2);
-  const d = points.map((p, i) => `${i === 0 ? "M" : "L"} ${sx(p.year)} ${sy(p.population_total)}`).join(" ");
+  const rawMinPop = Math.min(...points.map((p) => p.population_total));
+  const rawMaxPop = Math.max(...points.map((p) => p.population_total), 1);
+  const popSpan = Math.max(1, rawMaxPop - rawMinPop);
+  const minPop = Math.max(0, rawMinPop - popSpan * 0.1);
+  const maxPop = rawMaxPop + popSpan * 0.1;
+  const sx = (x: number) =>
+    pad + ((x - minYear) / Math.max(1e-6, maxYear - minYear)) * (w - pad * 2);
+  const sy = (y: number) =>
+    h - pad - ((y - minPop) / Math.max(1e-6, maxPop - minPop)) * (h - pad * 2);
+  const d = points
+    .map((p, i) => `${i === 0 ? "M" : "L"} ${sx(p.year)} ${sy(p.population_total)}`)
+    .join(" ");
   const xTicks = 5;
   const yTicks = 5;
 
@@ -346,7 +353,7 @@ function PopulationGraph({ points }: { points: VisualPoint[] }) {
           <g key={`xt-${i}`}>
             <line x1={x} y1={h - pad} x2={x} y2={h - pad + 4} stroke="var(--viz-axis)" />
             <text x={x - 8} y={h - pad + 15} fontSize="9" fill="var(--viz-text)">
-              {Math.round(yr)}
+              {formatTick(yr)}
             </text>
           </g>
         );
@@ -359,7 +366,7 @@ function PopulationGraph({ points }: { points: VisualPoint[] }) {
           <g key={`yt-${i}`}>
             <line x1={pad - 4} y1={y} x2={pad} y2={y} stroke="var(--viz-axis)" />
             <text x={2} y={y + 3} fontSize="9" fill="var(--viz-text)">
-              {Math.round(pv)}
+              {formatTick(pv)}
             </text>
           </g>
         );
@@ -373,6 +380,13 @@ function PopulationGraph({ points }: { points: VisualPoint[] }) {
       </text>
     </svg>
   );
+}
+
+function formatTick(v: number): string {
+  if (Math.abs(v) >= 1000) return Math.round(v).toString();
+  if (Math.abs(v) >= 100) return v.toFixed(0);
+  if (Math.abs(v) >= 10) return v.toFixed(1);
+  return v.toFixed(2);
 }
 
 function hexPoints(cx: number, cy: number, size: number): string[] {

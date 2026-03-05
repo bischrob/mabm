@@ -1,2 +1,7 @@
 target/
 outputs/
+gui/node_modules/
+gui/dist/
+gui/api.stdout.log
+gui/api.stderr.log
+/package-lock.json
