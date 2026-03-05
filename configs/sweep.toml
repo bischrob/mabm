@@ -81,10 +81,10 @@ knockout_variants = ["none", "no_cultural_transmission", "no_threat_defensibilit
 enabled = true
 
 [sweep.fit_scoring.targets]
-population_total = 1200.0
-aggregation_count = 2.0
-network_density = 0.20
-mean_stress = 0.50
+population_total = 519.0
+aggregation_count = 0.0
+network_density = 1.0
+mean_stress = 0.1988
 
 [sweep.fit_scoring.weights]
 population = 0.40
@@ -93,10 +93,10 @@ network_density = 0.20
 stress = 0.15
 
 [sweep.fit_scoring.scales]
-population = 700.0
-aggregation = 2.0
-network_density = 0.20
-stress = 0.20
+population = 188.5
+aggregation = 0.5
+network_density = 0.05
+stress = 0.05
 
 [sweep.fit_scoring.calibration]
 enabled = true
