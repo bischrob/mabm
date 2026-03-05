@@ -94,6 +94,16 @@ pub fn validate_config(cfg: &AppConfig) -> Result<(), ConfigError> {
             "mvp.base_population must be > 0".to_string(),
         ));
     }
+    if cfg.mvp.spatial.hex_diameter_km <= 0.0 {
+        return Err(ConfigError::Validation(
+            "mvp.spatial.hex_diameter_km must be > 0.0".to_string(),
+        ));
+    }
+    if cfg.mvp.spatial.flat_travel_km_per_day <= 0.0 {
+        return Err(ConfigError::Validation(
+            "mvp.spatial.flat_travel_km_per_day must be > 0.0".to_string(),
+        ));
+    }
     if !(0.0..=0.5).contains(&cfg.mvp.storage.sigma_seed) {
         return Err(ConfigError::Validation(
             "mvp.storage.sigma_seed must be within [0.0, 0.5]".to_string(),

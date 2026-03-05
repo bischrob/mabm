@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     model::{Season, SettlementState, SimulationState, MVP_TRAIT_COUNT},
-    utils::{clamp01, fuel_stress, infected_share, labor_crowding, normalized_deficit},
+    utils::{
+        clamp01, fuel_stress, infected_share, labor_crowding, normalized_deficit,
+        roughness_adjusted_hex_crossing_days,
+    },
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -152,8 +155,13 @@ impl TickEngine {
     fn update_labor_allocation(&self, state: &mut SimulationState, _season: Season) {
         for settlement in state.settlements.values_mut() {
             let total = settlement.labor.seasonal_budget_hours.max(0.0);
-            let tier1_req =
-                settlement.labor.tier1_survival_hours.max(0.0) * settlement.burden_multiplier;
+            let tier1_req = settlement.labor.tier1_survival_hours.max(0.0)
+                * settlement.burden_multiplier
+                * travel_time_labor_multiplier(
+                    settlement,
+                    state.spatial_policy.hex_diameter_km,
+                    state.spatial_policy.flat_travel_km_per_day,
+                );
             let tier2_req =
                 settlement.labor.tier2_subsistence_hours.max(0.0) * settlement.burden_multiplier;
 
@@ -268,16 +276,18 @@ impl TickEngine {
             .map(|s| {
                 (
                     s.id,
+                    s.hex_id,
                     s.population,
                     s.stress_composite,
                     s.water.reliability,
                     s.burden_multiplier,
+                    s.defensibility,
                 )
             })
             .collect();
 
         let mut pop_delta: HashMap<u32, i32> = HashMap::new();
-        for (sid, pop, stress, _water, _burden) in &snapshot {
+        for (sid, source_hex_id, pop, stress, _water, _burden, _defensibility) in &snapshot {
             if *pop == 0 {
                 continue;
             }
@@ -311,7 +321,14 @@ impl TickEngine {
                 continue;
             }
 
-            if let Some(dest_id) = select_migration_destination(*sid, *stress, &snapshot) {
+            if let Some(dest_id) = select_migration_destination(
+                *sid,
+                *source_hex_id,
+                *stress,
+                &snapshot,
+                state.spatial_policy.hex_diameter_km,
+                state.spatial_policy.flat_travel_km_per_day,
+            ) {
                 *pop_delta.entry(*sid).or_insert(0) -= out as i32;
                 *pop_delta.entry(dest_id).or_insert(0) += out as i32;
             }
@@ -399,6 +416,8 @@ impl TickEngine {
             .map(|s| {
                 (
                     s.id,
+                    s.hex_id,
+                    s.defensibility,
                     s.population,
                     s.households,
                     s.stress_composite,
@@ -424,17 +443,29 @@ impl TickEngine {
             for j in (i + 1)..snapshot.len() {
                 let a = &snapshot[i];
                 let b = &snapshot[j];
-                if a.0 == b.0 || a.1 == 0 || b.1 == 0 {
+                if a.0 == b.0 || a.3 == 0 || b.3 == 0 {
                     continue;
                 }
 
-                let sim = jaccard_similarity(&a.7, &b.7);
-                let stress_gap = (a.3 - b.3).abs();
-                let labor_scale_a = (a.6 / (a.2.max(1) as f32 * 20.0)).clamp(0.0, 1.0);
-                let labor_scale_b = (b.6 / (b.2.max(1) as f32 * 20.0)).clamp(0.0, 1.0);
+                let sim = jaccard_similarity(&a.9, &b.9);
+                let stress_gap = (a.5 - b.5).abs();
+                let labor_scale_a = (a.8 / (a.4.max(1) as f32 * 20.0)).clamp(0.0, 1.0);
+                let labor_scale_b = (b.8 / (b.4.max(1) as f32 * 20.0)).clamp(0.0, 1.0);
                 let labor_scale = labor_scale_a.min(labor_scale_b);
-                let raw_weight =
-                    (sim * (1.0 - 0.5 * stress_gap) * (0.4 + 0.6 * labor_scale)).clamp(0.0, 1.0);
+                let hex_hops = a.1.abs_diff(b.1).max(1) as f32;
+                let route_distance_km = hex_hops * state.spatial_policy.hex_diameter_km.max(0.01);
+                let route_roughness = 0.5 * (a.2 + b.2);
+                let travel_days = roughness_adjusted_hex_crossing_days(
+                    route_distance_km,
+                    state.spatial_policy.flat_travel_km_per_day,
+                    route_roughness,
+                );
+                let travel_penalty = (travel_days / 1.0).clamp(0.0, 1.0);
+                let raw_weight = (sim
+                    * (1.0 - 0.5 * stress_gap)
+                    * (0.4 + 0.6 * labor_scale)
+                    * (1.0 - 0.45 * travel_penalty))
+                    .clamp(0.0, 1.0);
 
                 let key = ordered_pair(a.0, b.0);
                 let prior = *prev_weights.get(&key).unwrap_or(&0.0);
@@ -447,20 +478,20 @@ impl TickEngine {
                     continue;
                 }
 
-                let (donor, receiver) = if a.5 + 1.0e-6 < b.5 {
+                let (donor, receiver) = if a.7 + 1.0e-6 < b.7 {
                     (a, b)
-                } else if b.5 + 1.0e-6 < a.5 {
+                } else if b.7 + 1.0e-6 < a.7 {
                     (b, a)
-                } else if a.3 <= b.3 {
+                } else if a.5 <= b.5 {
                     (a, b)
                 } else {
                     (b, a)
                 };
 
-                let donor_buffer = donor.1 as f32 * 2500.0 * 30.0;
-                let donor_surplus = (donor.4 - donor_buffer).max(0.0);
-                let receiver_need = receiver.5.max(0.0);
-                let transfer_cap = (donor.4 * 0.03 * weight).max(0.0);
+                let donor_buffer = donor.3 as f32 * 2500.0 * 30.0;
+                let donor_surplus = (donor.6 - donor_buffer).max(0.0);
+                let receiver_need = receiver.7.max(0.0);
+                let transfer_cap = (donor.6 * 0.03 * weight * (1.0 - 0.35 * travel_penalty)).max(0.0);
                 let transfer = donor_surplus.min(receiver_need).min(transfer_cap);
 
                 if transfer > 0.0 {
@@ -645,11 +676,14 @@ fn refresh_households_and_labor(settlement: &mut SettlementState) {
 
 fn select_migration_destination(
     source_id: u32,
+    source_hex_id: u32,
     source_stress: f32,
-    snapshot: &[(u32, u32, f32, f32, f32)],
+    snapshot: &[(u32, u32, u32, f32, f32, f32, f32)],
+    hex_diameter_km: f32,
+    flat_travel_km_per_day: f32,
 ) -> Option<u32> {
     let mut best: Option<(u32, f32)> = None;
-    for (id, pop, stress, water_rel, burden) in snapshot {
+    for (id, target_hex_id, pop, stress, water_rel, burden, target_defensibility) in snapshot {
         if *id == source_id {
             continue;
         }
@@ -660,8 +694,17 @@ fn select_migration_destination(
             continue;
         }
 
-        let suitability =
-            (0.60 * (1.0 - *stress) + 0.30 * *water_rel + 0.10 * (2.0 - *burden)).clamp(0.0, 1.2);
+        let hex_hops = source_hex_id.abs_diff(*target_hex_id).max(1) as f32;
+        let route_distance_km = hex_hops * hex_diameter_km.max(0.01);
+        let travel_days = roughness_adjusted_hex_crossing_days(
+            route_distance_km,
+            flat_travel_km_per_day,
+            *target_defensibility,
+        );
+        let travel_penalty = (travel_days / 1.0).clamp(0.0, 1.0);
+        let suitability = (0.60 * (1.0 - *stress) + 0.30 * *water_rel + 0.10 * (2.0 - *burden)
+            - 0.25 * travel_penalty)
+            .clamp(0.0, 1.2);
         if let Some((_, best_score)) = best {
             if suitability > best_score {
                 best = Some((*id, suitability));
@@ -671,6 +714,20 @@ fn select_migration_destination(
         }
     }
     best.map(|(id, _)| id)
+}
+
+fn travel_time_labor_multiplier(
+    settlement: &SettlementState,
+    hex_diameter_km: f32,
+    flat_travel_km_per_day: f32,
+) -> f32 {
+    let crossing_days = roughness_adjusted_hex_crossing_days(
+        hex_diameter_km,
+        flat_travel_km_per_day,
+        settlement.defensibility,
+    );
+    // Legacy baseline used 1 day per flat crossing.
+    (crossing_days / 1.0).clamp(0.25, 2.5)
 }
 
 fn rebalance_disease_compartments(settlement: &mut SettlementState) {

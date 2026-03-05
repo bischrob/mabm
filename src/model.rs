@@ -146,6 +146,21 @@ impl Default for DemographyPolicy {
 }
 
 #[derive(Clone, Debug)]
+pub struct SpatialPolicy {
+    pub hex_diameter_km: f32,
+    pub flat_travel_km_per_day: f32,
+}
+
+impl Default for SpatialPolicy {
+    fn default() -> Self {
+        Self {
+            hex_diameter_km: 18.0,
+            flat_travel_km_per_day: 18.0,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct MechanismToggles {
     pub seed_tax_storage: bool,
     pub threat_defensibility: bool,
@@ -236,6 +251,7 @@ pub struct SimulationState {
     pub threat_policy: ThreatPolicy,
     pub cultural_policy: CulturalPolicy,
     pub demography_policy: DemographyPolicy,
+    pub spatial_policy: SpatialPolicy,
     pub mechanism_toggles: MechanismToggles,
     pub regional_threat_index: f32,
     pub simulation_seed: u64,
@@ -253,6 +269,7 @@ impl Default for SimulationState {
             threat_policy: ThreatPolicy::default(),
             cultural_policy: CulturalPolicy::default(),
             demography_policy: DemographyPolicy::default(),
+            spatial_policy: SpatialPolicy::default(),
             mechanism_toggles: MechanismToggles::default(),
             regional_threat_index: 0.0,
             simulation_seed: 0,

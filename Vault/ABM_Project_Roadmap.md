@@ -114,6 +114,10 @@ Goal:
    - lower-population, long-timespan parameter sweeps executed
    - early population-drop diagnosis completed (stress/resource pressure vs space)
    - tuned to near-stable slight-positive growth regime
+27. `[x]` Spatial travel reparameterization implemented:
+   - explicit spatial config block (`mvp.spatial`) with `hex_diameter_km` and `flat_travel_km_per_day`
+   - baseline switched to `1 km` hexes and `36 km/day` flat travel
+   - travel-time penalties integrated into labor, migration destination suitability, and trade throughput
 
 ## In Progress (Current MVP Build)
 

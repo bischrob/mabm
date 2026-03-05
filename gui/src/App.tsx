@@ -118,6 +118,7 @@ export function App() {
   }, [running]);
 
   const entries = useMemo(() => index?.entries ?? [], [index]);
+  const currentTick = visuals?.latest_tick ?? 0;
 
   async function refreshIndex() {
     try {
@@ -173,6 +174,7 @@ export function App() {
           <button onClick={refreshIndex}>Refresh</button>
         </div>
         <div className="runbox">
+          <div>Tick: {currentTick}</div>
           <label>
             Ticks:
             <input

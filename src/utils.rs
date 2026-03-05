@@ -28,3 +28,18 @@ pub fn labor_crowding(s: &SettlementState) -> f32 {
     let essential = s.labor.tier1_survival_hours + s.labor.tier2_subsistence_hours;
     clamp01(essential / total)
 }
+
+pub fn base_hex_crossing_days(hex_diameter_km: f32, flat_travel_km_per_day: f32) -> f32 {
+    (hex_diameter_km.max(0.001) / flat_travel_km_per_day.max(0.001)).max(0.0)
+}
+
+pub fn roughness_adjusted_hex_crossing_days(
+    hex_diameter_km: f32,
+    flat_travel_km_per_day: f32,
+    roughness: f32,
+) -> f32 {
+    let base = base_hex_crossing_days(hex_diameter_km, flat_travel_km_per_day);
+    // Use defensibility/terrain roughness as a symmetric travel-friction proxy.
+    let terrain_multiplier = 1.0 + 1.5 * clamp01(roughness);
+    base * terrain_multiplier
+}

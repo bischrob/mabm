@@ -38,6 +38,8 @@ pub struct MvpRunConfig {
     #[serde(default)]
     pub demography: DemographyConfig,
     #[serde(default)]
+    pub spatial: SpatialConfig,
+    #[serde(default)]
     pub gui: GuiRuntimeConfig,
     #[serde(default)]
     pub resources: SyntheticResourceConfig,
@@ -67,8 +69,8 @@ impl Default for MvpRunConfig {
         Self {
             ticks: 40, // 10 years at seasonal resolution
             snapshot_every_ticks: 4,
-            settlement_count: 75,
-            base_population: 120,
+            settlement_count: 10,
+            base_population: 100,
             seed: 42,
             climate: SyntheticClimateConfig::default(),
             storage: StorageConfig::default(),
@@ -78,8 +80,24 @@ impl Default for MvpRunConfig {
             mechanisms: MechanismToggleConfig::default(),
             metrics: MetricsConfig::default(),
             demography: DemographyConfig::default(),
+            spatial: SpatialConfig::default(),
             gui: GuiRuntimeConfig::default(),
             resources: SyntheticResourceConfig::default(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct SpatialConfig {
+    pub hex_diameter_km: f32,
+    pub flat_travel_km_per_day: f32,
+}
+
+impl Default for SpatialConfig {
+    fn default() -> Self {
+        Self {
+            hex_diameter_km: 18.0,
+            flat_travel_km_per_day: 18.0,
         }
     }
 }
@@ -275,6 +293,8 @@ pub fn build_synthetic_state(cfg: &MvpRunConfig) -> SimulationState {
     }
     sim.demography_policy.annual_birth_rate = annual_birth_rate.max(0.0);
     sim.demography_policy.annual_death_rate = annual_death_rate.max(0.0);
+    sim.spatial_policy.hex_diameter_km = cfg.spatial.hex_diameter_km.max(0.01);
+    sim.spatial_policy.flat_travel_km_per_day = cfg.spatial.flat_travel_km_per_day.max(0.01);
 
     for sid in 0..cfg.settlement_count {
         let population = cfg.base_population + (rng.next_u32() % 80);

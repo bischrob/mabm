@@ -17,7 +17,8 @@ The central research goal is to test how climate variability, resource friction,
 The simulation uses:
 
 1. Seasonal time steps (4 ticks/year),
-2. 18 km flat-to-flat hexes as spatial units,
+2. 1 km flat-to-flat hexes as spatial units,
+   with a flat-ground travel baseline of 36 km/day (`1/36 day` per hex crossing),
 3. deterministic staged updates for reproducibility,
 4. high-scale design choices (settlement/hex-level aggregation where possible),
 5. uncertainty-aware parameters for calibration and sweeps.

@@ -61,6 +61,10 @@ network_min_weight = 0.20
 use_life_table_default = true
 life_table_csv_path = "input/neolithicdemographytable.csv"
 
+[mvp.spatial]
+hex_diameter_km = 1.0
+flat_travel_km_per_day = 36.0
+
 [mvp.gui]
 live_update_every_ticks = 0
 

@@ -3,8 +3,8 @@ scenario_id = "synthetic-transition-long"
 [mvp]
 ticks = 2000
 snapshot_every_ticks = 20
-settlement_count = 270
-base_population = 20
+settlement_count = 10
+base_population = 100
 seed = 42
 
 [mvp.climate]
@@ -62,6 +62,10 @@ use_life_table_default = true
 life_table_csv_path = "input/neolithicdemographytable.csv"
 annual_birth_rate_override = 0.078
 annual_death_rate_override = 0.053
+
+[mvp.spatial]
+hex_diameter_km = 1.0
+flat_travel_km_per_day = 36.0
 
 [mvp.gui]
 live_update_every_ticks = 0

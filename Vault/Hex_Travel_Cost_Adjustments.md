@@ -2,12 +2,14 @@
 
 Assumption:
 
-- Hex diameter is 18 km flat-to-flat.
-- Flat-ground baseline is 1 day per hex transition.
+- Hex diameter is 1 km flat-to-flat.
+- Flat-ground baseline is 36 km/day.
+- Base flat crossing time is `1/36 day` (`0.02778 day`, ~40 minutes).
 
 Implementation idea (symmetric edge cost):
 
-1. Base edge time: `t_base = 1.0 day`.
+1. Base edge time: `t_base = hex_diameter_km / flat_travel_km_per_day`.
+   - With current defaults: `t_base = 1 / 36 day`.
 2. Compute edge slope magnitude: `s = abs((z_j - z_i) / d_ij)`.
 3. Slope multiplier from a speed model (normalized at flat slope):
    - `m_slope = v(0) / v_sym(s)`.
