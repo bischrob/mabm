@@ -325,8 +325,71 @@ impl TickEngine {
         // Placeholder: tie decay/formation and route-loss update.
     }
 
-    fn update_demography(&self, _state: &mut SimulationState, _season: Season) {
-        // Placeholder: births/deaths/migration accounting.
+    fn update_demography(&self, state: &mut SimulationState, season: Season) {
+        for settlement in state.settlements.values_mut() {
+            // Demography closes the annual feedback loop: subsistence stress and
+            // disease pressure must alter population trajectories each season.
+            let pop0 = settlement.population.max(1);
+            let popf = pop0 as f32;
+
+            let base_birth_rate_annual = 0.033_f32;
+            let base_death_rate_annual = 0.021_f32;
+            let season_birth_factor = match season {
+                Season::Spring => 1.10,
+                Season::Summer => 1.00,
+                Season::Autumn => 0.95,
+                Season::Winter => 0.95,
+            };
+            let season_death_factor = match season {
+                Season::Spring => 0.95,
+                Season::Summer => 0.95,
+                Season::Autumn => 1.00,
+                Season::Winter => 1.10,
+            };
+
+            let birth_rate_season =
+                (base_birth_rate_annual * season_birth_factor / 4.0).clamp(0.0, 0.02);
+            let death_base_season =
+                (base_death_rate_annual * season_death_factor / 4.0).clamp(0.0, 0.03);
+
+            let stress = clamp01(settlement.stress_composite);
+            let disease_pressure = clamp01(infected_share(settlement));
+            let burden_pressure = clamp01((settlement.burden_multiplier - 1.0) / 2.0);
+            let emergency_pressure = if settlement.food.emergency_reciprocity_last_tick {
+                0.08
+            } else {
+                0.0
+            };
+
+            let birth_suppression =
+                (0.60 * stress + 0.25 * disease_pressure + 0.15 * burden_pressure).clamp(0.0, 0.90);
+            let births = (popf * birth_rate_season * (1.0 - birth_suppression))
+                .round()
+                .max(0.0) as u32;
+
+            let death_rate = death_base_season
+                + 0.060 * stress
+                + 0.035 * disease_pressure
+                + 0.020 * burden_pressure
+                + emergency_pressure;
+            let deaths = (popf * death_rate.clamp(0.0, 0.35)).round().max(0.0) as u32;
+
+            let pop1 = pop0.saturating_add(births).saturating_sub(deaths).max(1);
+            settlement.population = pop1;
+
+            // Maintain household-scale labor and trait denominators as population moves.
+            settlement.households = (settlement.population / 5).max(1);
+            settlement.labor.seasonal_budget_hours = settlement.households as f32 * 180.0;
+            settlement.labor.tier1_survival_hours = settlement.households as f32 * 45.0;
+            settlement.labor.tier2_subsistence_hours = settlement.households as f32 * 70.0;
+            settlement.labor.tier3_maintenance_hours = settlement.households as f32 * 20.0;
+
+            for c in &mut settlement.trait_household_counts {
+                *c = (*c).min(settlement.households);
+            }
+
+            rebalance_disease_compartments(settlement);
+        }
     }
 
     fn compute_composite_stress(&self, settlement: &SettlementState) -> f32 {
@@ -361,4 +424,42 @@ fn deterministic_signed_noise(seed: u64, tick: u32, settlement_id: u32, trait_id
     x ^= x >> 33;
     let u = (x as f64 / u64::MAX as f64) as f32;
     (u * 2.0) - 1.0
+}
+
+fn rebalance_disease_compartments(settlement: &mut SettlementState) {
+    let n = settlement.population.max(1) as i64;
+    let s0 = settlement.disease.susceptible as i64;
+    let e0 = settlement.disease.exposed as i64;
+    let i0 = settlement.disease.infected as i64;
+    let r0 = settlement.disease.recovered as i64;
+    let sum0 = (s0 + e0 + i0 + r0).max(1);
+    let scale = n as f32 / sum0 as f32;
+
+    let mut s = (s0 as f32 * scale).round() as i64;
+    let mut e = (e0 as f32 * scale).round() as i64;
+    let mut i = (i0 as f32 * scale).round() as i64;
+    let mut r = (r0 as f32 * scale).round() as i64;
+
+    s = s.max(0);
+    e = e.max(0);
+    i = i.max(0);
+    r = r.max(0);
+
+    let mut sum = s + e + i + r;
+    let delta = n - sum;
+    s += delta;
+    if s < 0 {
+        // Safety fallback if numeric drift over-corrects susceptible.
+        let under = -s;
+        s = 0;
+        r = (r - under).max(0);
+        sum = s + e + i + r;
+        let rem = n - sum;
+        s += rem;
+    }
+
+    settlement.disease.susceptible = s as u32;
+    settlement.disease.exposed = e as u32;
+    settlement.disease.infected = i as u32;
+    settlement.disease.recovered = r as u32;
 }

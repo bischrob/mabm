@@ -385,4 +385,97 @@ mod tests {
             assert!((a.fit_score - b.fit_score).abs() < 1e-6);
         }
     }
+
+    #[test]
+    fn demography_grows_under_low_stress() {
+        let mut sim = SimulationState::default();
+        sim.climate_forcing_pdsi = vec![0.0];
+        sim.settlements.insert(
+            1,
+            SettlementState {
+                id: 1,
+                population: 200,
+                households: 40,
+                climate: ClimateState {
+                    pdsi: 0.0,
+                    drought_index_5y: 0.0,
+                    local_multiplier: 1.0,
+                    local_offset: 0.0,
+                },
+                water: WaterState {
+                    reliability: 1.0,
+                    quality: 1.0,
+                },
+                fuel: FuelState {
+                    high_wood: 1000.0,
+                    low_wood: 0.0,
+                    alt_fuel: 0.0,
+                },
+                food: FoodState {
+                    yield_kcal: 80_000_000.0,
+                    stores_kcal: 40_000_000.0,
+                    deficit_kcal: 0.0,
+                    ..FoodState::default()
+                },
+                ..SettlementState::default()
+            },
+        );
+
+        let engine = TickEngine::new(CouplingConfig::default());
+        engine.run_one_tick(&mut sim);
+        let s = sim.settlements.get(&1).expect("settlement exists");
+        assert!(s.population > 200);
+    }
+
+    #[test]
+    fn demography_declines_under_high_stress() {
+        let mut sim = SimulationState::default();
+        sim.climate_forcing_pdsi = vec![-6.0];
+        sim.settlements.insert(
+            1,
+            SettlementState {
+                id: 1,
+                population: 200,
+                households: 40,
+                climate: ClimateState {
+                    pdsi: -6.0,
+                    drought_index_5y: 1.0,
+                    local_multiplier: 1.0,
+                    local_offset: 0.0,
+                },
+                water: WaterState {
+                    reliability: 0.1,
+                    quality: 0.1,
+                },
+                fuel: FuelState {
+                    high_wood: 0.0,
+                    low_wood: 10.0,
+                    alt_fuel: 0.0,
+                },
+                food: FoodState {
+                    yield_kcal: 10_000.0,
+                    stores_kcal: 0.0,
+                    deficit_kcal: 0.0,
+                    ..FoodState::default()
+                },
+                disease: DiseaseState {
+                    susceptible: 10,
+                    exposed: 10,
+                    infected: 170,
+                    recovered: 10,
+                    beta_water_multiplier: 1.0,
+                },
+                defensibility: 1.0,
+                ..SettlementState::default()
+            },
+        );
+
+        let engine = TickEngine::new(CouplingConfig::default());
+        engine.run_one_tick(&mut sim);
+        let s = sim.settlements.get(&1).expect("settlement exists");
+        assert!(s.population < 200);
+        let disease_total =
+            s.disease.susceptible + s.disease.exposed + s.disease.infected + s.disease.recovered;
+        assert_eq!(disease_total, s.population);
+    }
 }

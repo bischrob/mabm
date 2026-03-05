@@ -74,6 +74,10 @@ Goal:
    - configurable target profile and weights
    - normalized error components per pattern
    - per-run fit score in sweep summary output
+17. `[x]` Seasonal demography subsystem implemented:
+   - stress-coupled births/deaths per seasonal tick
+   - household/labor rebalance after population updates
+   - disease compartment rebalance to remain population-consistent
 
 ## In Progress (Current MVP Build)
 
@@ -99,11 +103,12 @@ Goal:
 MVP is done when all are true:
 
 1. `[ ]` Simulated-data runs complete reproducibly from config.
-2. `[ ]` Core mechanisms run without placeholder math for:
-   - food/storage
-   - water/fuel/labor stress
-   - migration/fission pressure
-   - cultural trait dynamics
+2. `[~]` Core mechanisms run without placeholder math for:
+   - food/storage `[x]`
+   - water/fuel/labor stress `[x]`
+   - migration/fission pressure `[ ]`
+   - cultural trait dynamics `[x]`
+   - demography births/deaths `[x]`
 3. `[ ]` Trait-frequency CSV output is stable and analysis-ready.
 4. `[ ]` At least one 1,000-year synthetic run completes at target scale without crash.
 5. `[ ]` At least one sensitivity mini-sweep and one knockout run complete.
@@ -118,3 +123,4 @@ MVP is done when all are true:
 ## Working Rule
 
 - Default to synthetic-data-first, reproducible runs until MVP acceptance gate is met, then expand to GIS and empirical calibration.
+
