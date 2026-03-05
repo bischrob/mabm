@@ -116,11 +116,35 @@ type VisualPayload = {
   settlements_latest: VisualSettlement[];
 };
 
+type ConfigRequirementFile = {
+  path: string;
+  exists: boolean;
+};
+
+type ConfigCatalogEntry = {
+  path: string;
+  scenario_id: string;
+  label: string;
+  use_gis_hex_inputs: boolean;
+  gis_hex_csv_path: string;
+  gui_load?: {
+    description?: string;
+    default?: boolean;
+    required_files?: ConfigRequirementFile[];
+  };
+};
+
+type ConfigCatalogResponse = {
+  default_path: string;
+  configs: ConfigCatalogEntry[];
+};
+
 export function App() {
   const [index, setIndex] = useState<RunIndex | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedManifest, setSelectedManifest] = useState<RunManifest | null>(null);
-  const [configPath, setConfigPath] = useState("configs/sweep_long_transition.toml");
+  const [configCatalog, setConfigCatalog] = useState<ConfigCatalogEntry[]>([]);
+  const [configPath, setConfigPath] = useState("configs/phoenix_basin.toml");
   const [ticksOverride, setTicksOverride] = useState(0);
   const [liveUpdateEveryTicks, setLiveUpdateEveryTicks] = useState(10);
   const [seedValue, setSeedValue] = useState<number>(() => randomSeed());
@@ -132,6 +156,7 @@ export function App() {
   const [hexMetricKey, setHexMetricKey] = useState<HexMetricKey>("hex_quality");
 
   useEffect(() => {
+    refreshConfigs();
     refreshIndex();
   }, []);
 
@@ -188,6 +213,14 @@ export function App() {
   }, [running]);
 
   const entries = useMemo(() => index?.entries ?? [], [index]);
+  const selectedConfigMeta = useMemo(
+    () => configCatalog.find((c) => c.path === configPath) ?? null,
+    [configCatalog, configPath]
+  );
+  const missingConfigRequirements = useMemo(
+    () => (selectedConfigMeta?.gui_load?.required_files ?? []).filter((f) => !f.exists),
+    [selectedConfigMeta]
+  );
   const currentTick = visuals?.latest_tick ?? 0;
   const initialHexCount =
     visuals?.hex_count ??
@@ -218,7 +251,33 @@ export function App() {
     }
   }
 
+  async function refreshConfigs() {
+    try {
+      const res = await fetch("/api/configs");
+      if (!res.ok) throw new Error(await res.text());
+      const data: ConfigCatalogResponse = await res.json();
+      const list = data.configs ?? [];
+      setConfigCatalog(list);
+      setError(null);
+      if (list.length === 0) return;
+      const hasCurrent = list.some((c) => c.path === configPath);
+      if (!hasCurrent) {
+        setConfigPath(data.default_path || list[0].path);
+      }
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
   async function triggerRun() {
+    if (missingConfigRequirements.length > 0) {
+      setError(
+        `Cannot run. Missing required files: ${missingConfigRequirements
+          .map((r) => r.path)
+          .join(", ")}`
+      );
+      return;
+    }
     setRunning(true);
     setRunLog("");
     try {
@@ -253,15 +312,29 @@ export function App() {
       <header className="topbar">
         <h1>MABM Run Console</h1>
         <div className="runbox">
-          <input
-            value={configPath}
-            onChange={(e) => setConfigPath(e.target.value)}
-            className="cfg"
-          />
-          <button onClick={triggerRun} disabled={running}>
+          <label>
+            Config:
+            <select
+              value={configPath}
+              onChange={(e) => setConfigPath(e.target.value)}
+              className="cfg"
+            >
+              {configCatalog.length === 0 ? (
+                <option value={configPath}>{configPath}</option>
+              ) : (
+                configCatalog.map((c) => (
+                  <option key={c.path} value={c.path}>
+                    {c.label}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+          <button onClick={triggerRun} disabled={running || missingConfigRequirements.length > 0}>
             {running ? "Running..." : "Run"}
           </button>
           <button onClick={refreshIndex}>Refresh</button>
+          <button onClick={refreshConfigs}>Refresh Configs</button>
         </div>
         <div className="runbox">
           <div>Tick: {currentTick}</div>
@@ -305,6 +378,30 @@ export function App() {
             Keep seed fixed
           </label>
         </div>
+        {selectedConfigMeta ? (
+          <div className="runbox">
+            <div>
+              <strong>Scenario:</strong> {selectedConfigMeta.scenario_id || "-"}
+            </div>
+            <div>
+              <strong>GIS mode:</strong>{" "}
+              {selectedConfigMeta.use_gis_hex_inputs ? "enabled" : "disabled"}
+            </div>
+            {selectedConfigMeta.gui_load?.description ? (
+              <div>
+                <strong>Load:</strong> {selectedConfigMeta.gui_load.description}
+              </div>
+            ) : null}
+            {(selectedConfigMeta.gui_load?.required_files?.length ?? 0) > 0 ? (
+              <div>
+                <strong>Required files:</strong>{" "}
+                {(selectedConfigMeta.gui_load?.required_files ?? [])
+                  .map((f) => `${f.exists ? "OK" : "Missing"} ${f.path}`)
+                  .join(" | ")}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </header>
 
       {error ? <div className="error">{error}</div> : null}

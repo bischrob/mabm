@@ -1,0 +1,100 @@
+scenario_id = "phoenix-basin-gis"
+
+[gui_load]
+label = "Phoenix Basin (GIS)"
+description = "Runs the ABM on GIS-derived Phoenix HUC8 hex attributes."
+required_files = ["input/phoenix_basin_hex_attributes.csv"]
+default = true
+
+[mvp]
+ticks = 800
+snapshot_every_ticks = 10
+hex_count = 300
+settlement_count = 10
+base_population = 100
+seed = 42
+
+[mvp.climate]
+pdsi_min = -6.0
+pdsi_max = 6.0
+ar1_phi = 0.65
+noise_std = 0.55
+cycle1_years = 18.0
+cycle1_amp = 1.1
+cycle2_years = 55.0
+cycle2_amp = 0.8
+shock_chance_per_year = 0.02
+shock_mean = -1.5
+shock_duration_years_min = 2
+shock_duration_years_max = 6
+
+[mvp.storage]
+sigma_seed = 0.10
+spoilage_rate = 0.05
+allow_seed_draw = true
+enable_emergency_reciprocity = true
+
+[mvp.threat]
+drought_weight = 0.5
+conflict_weight = 0.3
+food_weight = 0.2
+defensibility_cost_k = 0.15
+
+[mvp.culture]
+neutral_drift_rate = 0.02
+conformist_strength = 0.06
+prestige_rate = 0.08
+jitter_scale = 0.01
+max_trait_step_per_tick = 0.15
+
+[mvp.validation_outputs]
+enable_trait_deposition = false
+enable_network_snapshot = false
+deposition_rate_per_tick = 0.01
+network_min_weight = 0.20
+
+[mvp.mechanisms]
+seed_tax_storage = true
+threat_defensibility = true
+cultural_transmission = true
+water_quality_disease_coupling = true
+
+[mvp.metrics]
+enable_baseline_metrics = true
+aggregation_threshold = 200
+network_min_weight = 0.20
+
+[mvp.demography]
+use_life_table_default = true
+life_table_csv_path = "input/neolithicdemographytable.csv"
+annual_birth_rate_override = 0.056
+annual_death_rate_override = 0.030
+
+[mvp.spatial]
+hex_diameter_km = 1.0
+flat_travel_km_per_day = 36.0
+population_capacity_per_hex = 500.0
+min_population_capacity_per_hex = 40.0
+stores_capacity_fraction = 0.20
+use_gis_hex_inputs = true
+gis_hex_csv_path = "input/phoenix_basin_hex_attributes.csv"
+
+[mvp.gui]
+live_update_every_ticks = 10
+
+[mvp.resources]
+yield_multiplier = 1.00
+stores_multiplier = 1.00
+
+[coupling.stress_weights]
+food = 0.30
+water = 0.25
+fuel = 0.15
+disease = 0.15
+conflict = 0.15
+
+[coupling.interaction_weights]
+drought_x_disease = 0.08
+drought_x_conflict = 0.08
+water_x_disease = 0.10
+fuel_x_labor = 0.06

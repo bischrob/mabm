@@ -2,6 +2,7 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -33,6 +34,35 @@ app.get("/api/runs", async (_req, res) => {
     res.type("application/json").send(raw);
   } catch {
     res.json({ updated_at_utc: "", entries: [] });
+  }
+});
+
+app.get("/api/configs", async (_req, res) => {
+  try {
+    const configsDir = path.join(repoRoot, "configs");
+    const entries = await fs.readdir(configsDir, { withFileTypes: true });
+    const files = entries
+      .filter((e) => e.isFile() && e.name.toLowerCase().endsWith(".toml"))
+      .map((e) => e.name)
+      .sort((a, b) => a.localeCompare(b));
+
+    const configs = [];
+    for (const name of files) {
+      const relPath = path.posix.join("configs", name);
+      const absPath = path.join(configsDir, name);
+      const raw = await fs.readFile(absPath, "utf-8");
+      configs.push(parseConfigMetadata(raw, relPath, repoRoot));
+    }
+
+    const defaultPath =
+      configs.find((c) => c.gui_load?.default)?.path ??
+      configs.find((c) => c.path === "configs/phoenix_basin.toml")?.path ??
+      configs[0]?.path ??
+      "configs/sweep_long_transition.toml";
+
+    res.json({ default_path: defaultPath, configs });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
   }
 });
 
@@ -122,7 +152,7 @@ app.get("/api/runs/:runId/visuals", async (req, res) => {
 });
 
 app.post("/api/run", async (req, res) => {
-  const configPath = req.body?.configPath ?? "configs/sweep_long_transition.toml";
+  const configPath = req.body?.configPath ?? "configs/phoenix_basin.toml";
   const ticksOverride = Number(req.body?.ticksOverride ?? 0);
   const liveUpdateEveryTicks = Number(req.body?.liveUpdateEveryTicks ?? 0);
   const seedOverride = Number(req.body?.seedOverride ?? 0);
@@ -229,6 +259,92 @@ function splitCsvLine(line) {
   }
   out.push(cur);
   return out;
+}
+
+function parseConfigMetadata(raw, relPath, rootDir) {
+  const scenarioId = firstGroup(raw, /^scenario_id\s*=\s*"([^"]+)"/m) ?? "";
+  const spatial = parseTableBody(raw, "mvp.spatial");
+  const guiLoad = parseTableBody(raw, "gui_load");
+  const useGisHexInputs = parseTomlBool(spatial, "use_gis_hex_inputs") ?? false;
+  const gisHexCsvPath = parseTomlString(spatial, "gis_hex_csv_path");
+  const description = parseTomlString(guiLoad, "description") ?? "";
+  const label =
+    parseTomlString(guiLoad, "label") ??
+    (scenarioId ? `${scenarioId} (${relPath})` : relPath);
+  const isDefault = parseTomlBool(guiLoad, "default") ?? false;
+  const requiredFilesFromGui = parseTomlStringArray(guiLoad, "required_files");
+  const requiredFilePaths =
+    requiredFilesFromGui.length > 0
+      ? requiredFilesFromGui
+      : useGisHexInputs && gisHexCsvPath
+        ? [gisHexCsvPath]
+        : [];
+  const required_files = requiredFilePaths.map((p) => {
+    const abs = path.isAbsolute(p) ? p : path.join(rootDir, p);
+    return { path: p, exists: fileExistsSync(abs) };
+  });
+
+  return {
+    path: relPath,
+    scenario_id: scenarioId,
+    label,
+    use_gis_hex_inputs: useGisHexInputs,
+    gis_hex_csv_path: gisHexCsvPath ?? "",
+    gui_load: {
+      description,
+      default: isDefault,
+      required_files
+    }
+  };
+}
+
+function parseTableBody(raw, tableName) {
+  const esc = tableName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(
+    `^\\[${esc}\\]\\s*\\r?\\n([\\s\\S]*?)(?=^\\[[^\\]]+\\]\\s*$|(?![\\s\\S]))`,
+    "m"
+  );
+  const m = raw.match(re);
+  return m ? m[1] : "";
+}
+
+function parseTomlString(sectionBody, key) {
+  const re = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*"([^"]*)"\\s*$`, "m");
+  const m = sectionBody.match(re);
+  return m ? m[1] : null;
+}
+
+function parseTomlBool(sectionBody, key) {
+  const re = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*(true|false)\\s*$`, "mi");
+  const m = sectionBody.match(re);
+  if (!m) return null;
+  return m[1].toLowerCase() === "true";
+}
+
+function parseTomlStringArray(sectionBody, key) {
+  const re = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*\\[(.*)\\]\\s*$`, "m");
+  const m = sectionBody.match(re);
+  if (!m) return [];
+  const body = m[1].trim();
+  if (!body) return [];
+  return body
+    .split(",")
+    .map((s) => s.trim())
+    .map((s) => s.replace(/^"(.*)"$/, "$1"))
+    .filter((s) => s.length > 0);
+}
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function firstGroup(raw, re) {
+  const m = raw.match(re);
+  return m ? m[1] : null;
+}
+
+function fileExistsSync(p) {
+  return existsSync(p);
 }
 
 function aggregatePopulationFromSettlements(settlementRows) {
